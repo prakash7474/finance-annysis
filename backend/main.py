@@ -26,8 +26,10 @@ from backend.api import (  # noqa: E402
     events_routes,
     finance_routes,
     health_routes,
+    intelligence_routes,
     loan_routes,
     market_routes,
+    v6_routes,
     voice_routes,
 )
 from backend.config import settings  # noqa: E402
@@ -102,11 +104,13 @@ async def request_ids_middleware(request: Request, call_next):
 # Mount routers.
 app.include_router(health_routes.router)
 app.include_router(finance_routes.router)
+app.include_router(intelligence_routes.router)
 app.include_router(loan_routes.router)
 app.include_router(market_routes.router)
 app.include_router(chat_routes.router)
 app.include_router(voice_routes.router)
 app.include_router(events_routes.router)
+app.include_router(v6_routes.router)
 
 
 @app.get("/")

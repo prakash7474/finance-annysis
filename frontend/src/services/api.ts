@@ -55,6 +55,33 @@ export const api = {
   voiceStart: () => request<{ session_id: string; mode: string }>("/api/voice/start-session", { method: "POST" }),
   voiceSend: (session_id: string, audio: string) =>
     request<any>("/api/voice/send-audio", { method: "POST", body: JSON.stringify({ session_id, audio }) }),
+
+  // ── Phase 5 intelligence ──────────────────────────────────────────────────
+  financeHealth: () => request<any>("/api/finance/health"),
+  anomalies: () => request<{ anomalies: any[] }>("/api/finance/anomalies"),
+  cashForecast: (days = 30) => request<any>(`/api/finance/forecast/cashflow?days=${days}`),
+  spendingForecast: (days = 30) => request<any>(`/api/finance/forecast/spending?days=${days}`),
+  goals: () => request<any>("/api/finance/goals"),
+  createGoal: (body: any) => request<any>("/api/finance/goals", { method: "POST", body: JSON.stringify(body) }),
+  runScenario: (body: any) => request<any>("/api/finance/scenario", { method: "POST", body: JSON.stringify(body) }),
+  debt: () => request<any>("/api/finance/debt"),
+  financialAlerts: () => request<any>("/api/finance/alerts"),
+  recommendations: () => request<any>("/api/finance/recommendations"),
+  approveRecommendation: (id: string) =>
+    request<any>(`/api/finance/recommendations/${id}/approve`, { method: "POST" }),
+  rejectRecommendation: (id: string) =>
+    request<any>(`/api/finance/recommendations/${id}/reject`, { method: "POST" }),
+  audit: (traceId: string) => request<any>(`/api/finance/audit/${traceId}`),
+  emitAlerts: () => request<any>("/api/finance/alerts/emit", { method: "POST" }),
+  narrateIntelligence: (message: string) =>
+    request<any>("/api/finance/narrate", { method: "POST", body: JSON.stringify({ message }) }),
+
+  // ── Phase 6 multi-agent ──────────────────────────────────────────────────
+  agents: () => request<any>("/api/agents"),
+  tools: () => request<any>("/api/tools"),
+  agentRoute: (message: string, session_id?: string) =>
+    request<any>("/api/agents/route", { method: "POST", body: JSON.stringify({ message, session_id }) }),
+  audits: (traceId: string) => request<any>(`/api/audit/${traceId}`),
 };
 
 export function openEventSource(onEvent: (event: string, data: any) => void): EventSource {

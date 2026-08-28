@@ -48,13 +48,15 @@ def fallback_narration(facts: Dict[str, Any], intent: Optional[str] = None) -> s
     domain = facts.get("domain") or intent
 
     cash = facts.get("cash_position") or facts.get("cash")
-    if cash:
+    if isinstance(cash, dict):
         net = cash.get("net_cash")
         parts.append(f"Your current net cash is {_money(net)}.")
         accounts = cash.get("accounts")
         if accounts:
             for acc in accounts[:3]:
                 parts.append(f"  {acc.get('account_name', acc.get('account_id'))}: {_money(acc.get('balance'))}")
+    elif isinstance(cash, (int, float)):
+        parts.append(f"Your current net cash is {_money(float(cash))}.")
 
     baseline = facts.get("baseline")
     if baseline:
@@ -105,6 +107,42 @@ def fallback_narration(facts: Dict[str, Any], intent: Optional[str] = None) -> s
         parts.append(f"  Current EMI {_money(cur.get('emi'))} -> scenario {_money(scn.get('emi'))}.")
         parts.append(f"  Current DTI {_pct(cur.get('dti_ratio'))} -> scenario {_pct(scn.get('dti_ratio'))}.")
         parts.append(f"  Current risk {cur.get('risk')} -> scenario {scn.get('risk')}.")
+
+    # ── Phase 5 intelligence facts ────────────────────────────────────────────
+    if facts.get("health_status") or facts.get("health_score") is not None:
+        status = facts.get("health_status")
+        score = facts.get("health_score")
+        parts.append(f"Your financial health score is {score}/100 ({status})." if score is not None and status
+                     else "Your financial health status is reported.")
+    if facts.get("dti") is not None:
+        parts.append(f"Your debt-to-income ratio is {_pct(facts['dti'])}.")
+    if facts.get("cash") is not None:
+        parts.append(f"Current net cash is {_money(facts['cash'])}.")
+    if facts.get("forecast_balance") is not None:
+        parts.append(f"Projected balance, as a forecast (not a guarantee), is {_money(facts['forecast_balance'])}.")
+    anomalies = facts.get("anomalies")
+    if anomalies:
+        parts.append(f"{len(anomalies)} transaction anomaly(ies) detected.")
+    forecast = facts.get("forecast")
+    if forecast and isinstance(forecast, dict):
+        parts.append(f"Over {forecast.get('days', 'N/A')} days, projected balance is "
+                     f"{_money(forecast.get('projected_balance'))} (forecast, not guaranteed).")
+    goals = facts.get("goals")
+    if goals:
+        for goal in goals[:2]:
+            if isinstance(goal, dict) and goal.get("monthly_shortfall"):
+                parts.append(f"Goal '{goal.get('name', 'goal')}' has a shortfall of "
+                             f"{_money(goal['monthly_shortfall'])} per month.")
+    recommendations = facts.get("recommendations")
+    if recommendations:
+        parts.append("Recommendations (informational, not guaranteed outcomes):")
+        for rec in recommendations[:4]:
+            title = rec.get("title") if isinstance(rec, dict) else rec
+            parts.append(f"  - {title}")
+    if facts.get("alerts"):
+        parts.append(f"{len(facts['alerts'])} important alert(s) are active.")
+    if facts.get("market_watch") or facts.get("market_alerts"):
+        parts.append("Market watch is active; this is analysis only and never places trades.")
 
     if not parts:
         return "I couldn't find a matching capability for that request."

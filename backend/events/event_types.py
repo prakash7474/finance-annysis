@@ -1,0 +1,19 @@
+"""Event types / names for FinPilot Phase 6."""
+
+EVENT_TRANSACTION_CREATED = "transaction.created"
+EVENT_TRANSACTION_ANOMALY = "transaction.anomaly_detected"
+EVENT_CASH_LOW = "cash.low"
+EVENT_DTI_HIGH = "dti.high"
+EVENT_GOAL_SHORTFALL = "goal.shortfall"
+EVENT_LOAN_RISK = "loan.risk_detected"
+EVENT_MARKET_CHANGE = "market.signal_changed"
+EVENT_RECOMMENDATION = "recommendation.created"
+EVENT_APPROVAL_REQUESTED = "approval.requested"
+EVENT_FINANCIAL_ALERT = "financial_alert"
+EVENT_TOOL_STEP = "tool_step"
+
+ALL_EVENTS = [
+    EVENT_TRANSACTION_CREATED, EVENT_TRANSACTION_ANOMALY, EVENT_CASH_LOW,
+    EVENT_DTI_HIGH, EVENT_GOAL_SHORTFALL, EVENT_LOAN_RISK, EVENT_MARKET_CHANGE,
+    EVENT_RECOMMENDATION, EVENT_APPROVAL_REQUESTED, EVENT_FINANCIAL_ALERT,
+]

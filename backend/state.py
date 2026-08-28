@@ -8,6 +8,7 @@ from typing import Any, Dict, Optional
 from backend.config import settings
 from backend.governance.rate_limit import RateLimiter
 from backend.orchestrator.data_layer import Services
+from backend.orchestrator.mcp_client_manager import MCPClientManager
 from backend.orchestrator.narrator import Narrator, make_narrator
 from backend.orchestrator.orchestrator import Orchestrator
 from backend.orchestrator.session import SessionManager
@@ -23,6 +24,8 @@ class AppState:
     risk_observer: Optional[Any] = None
     components_status: Dict[str, str] = field(default_factory=dict)
     data_source: str = "mock"
+    multi_agent: Optional[Any] = None
+    mcp_manager: Optional[Any] = None
 
 
 state = AppState()
@@ -38,5 +41,10 @@ def build(narrator: Optional["Narrator"] = None) -> AppState:
     state.session_manager = SessionManager()
     state.rate_limiter = RateLimiter()
     state.orchestrator = Orchestrator(services=services, narrator=narr, session_manager=state.session_manager)
+    state.mcp_manager = MCPClientManager()
+    from backend.agents.multi_agent_orchestrator import MultiAgentOrchestrator
+
+    state.multi_agent = MultiAgentOrchestrator(services=services, narrator=narr,
+                                               session_manager=state.session_manager)
     state.data_source = settings.DATA_SOURCE
     return state

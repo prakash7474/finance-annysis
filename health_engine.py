@@ -179,6 +179,10 @@ def compute_health_score(
     else:
         risk_level = "HEALTHY"
 
+    # A negative cash position is inherently high risk, regardless of the score.
+    if net_cash < 0 and risk_level in ("HEALTHY", "MODERATE"):
+        risk_level = "HIGH"
+
     return {
         "cash_score": round(cash_score, 1),
         "emi_score": round(emi_score, 1),
@@ -191,4 +195,120 @@ def compute_health_score(
         "emi_ratio": round(emi_ratio, 4),
         "cash_months": round(cash_months, 2),
         "savings_rate": round(savings_rate, 4),
+    }
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Phase 5 - FinancialHealthScore (deterministic, explicit formula)
+# ──────────────────────────────────────────────────────────────────────────────
+
+def compute_financial_health(
+    monthly_income: float,
+    monthly_expenses: float,
+    existing_emi: float,
+    net_cash: float,
+    new_emi: float = 0.0,
+    forecast_balance: float | None = None,
+) -> Dict[str, Any]:
+    """Phase 5 deterministic financial health score.
+
+    Formula (all deterministic, documented here):
+      liquidity_score : months of cash runway = net_cash / (income - emi_burden);
+                        score = clamp(runway / 3) * 100   (target 3 months)
+      debt_score      : DTI = (existing_emi + new_emi) / income;
+                        100 at DTI<=0.30, down to 15 at DTI>0.50
+      expense_score   : expense_ratio = monthly_expenses / income;
+                        100 at <=0.50, 40 at >=0.90
+      savings_score   : saving_rate = (income - expenses - emi_burden) / income;
+                        100 at >=0.20, down to 10 at <= -0.10
+
+      score = 0.20*liquidity + 0.35*debt + 0.20*expense + 0.25*savings
+
+    Status thresholds:
+      score >= 85 -> EXCELLENT; >=70 -> HEALTHY; >=55 -> MODERATE;
+      >=40 -> AT_RISK; else CRITICAL
+    """
+    income = float(monthly_income or 0.0)
+    expenses = float(monthly_expenses or 0.0)
+    emi_burden = float(existing_emi or 0.0) + float(new_emi or 0.0)
+    cash = float(net_cash or 0.0)
+
+    # liquidity
+    runway_income = income - emi_burden
+    cash_months = (cash / runway_income) if runway_income > 0 else (cash > 0)
+    liquidity_score = _clamp((cash_months if isinstance(cash_months, float) else 1.0) / 3.0, 0, 1) * 100
+    if cash_months is True:
+        liquidity_score = 100.0
+    elif isinstance(cash_months, float) and cash_months <= 0:
+        liquidity_score = 10.0
+
+    # debt (DTI)
+    dti = (emi_burden / income) if income > 0 else 99.0
+    debt_score = dti_score_component(min(dti, 0.99), HealthScoreConfig())
+
+    # expense
+    expense_ratio = (expenses / income) if income > 0 else 1.0
+    if expense_ratio <= 0.5:
+        expense_score = 100.0
+    elif expense_ratio >= 0.9:
+        expense_score = 40.0
+    else:
+        frac = (expense_ratio - 0.5) / 0.4
+        expense_score = 100.0 - frac * 60.0
+
+    # savings
+    saving_rate = (income - expenses - emi_burden) / income if income > 0 else -0.2
+    if saving_rate >= 0.20:
+        savings_score = 100.0
+    elif saving_rate >= 0.0:
+        savings_score = _clamp(70.0 + saving_rate * 150.0)
+    elif saving_rate >= -0.10:
+        savings_score = _clamp(40.0 + saving_rate * 100.0)
+    else:
+        savings_score = 10.0
+
+    score = round(
+        _clamp(
+            0.20 * liquidity_score + 0.35 * debt_score + 0.20 * expense_score + 0.25 * savings_score,
+            0, 100,
+        ),
+        1,
+    )
+
+    if score >= 85:
+        status = "EXCELLENT"
+    elif score >= 70:
+        status = "HEALTHY"
+    elif score >= 55:
+        status = "MODERATE"
+    elif score >= 40:
+        status = "AT_RISK"
+    else:
+        status = "CRITICAL"
+
+    reasons: List[str] = []
+    if dti > 0.5:
+        reasons.append("Debt-to-income ratio is critical (over 50%).")
+    elif dti > 0.4:
+        reasons.append("Debt-to-income ratio is elevated (40-50%).")
+    if cash < 0:
+        reasons.append("Net cash position is negative.")
+    elif isinstance(cash_months, float) and cash_months < 1.0:
+        reasons.append("Cash runway is below one month.")
+    if expense_ratio > 0.8:
+        reasons.append("Expense ratio is high relative to income.")
+    if saving_rate < 0.0:
+        reasons.append("Savings capacity is negative.")
+    if forecast_balance is not None and forecast_balance < 0:
+        reasons.append("Projected cash balance is negative.")
+
+    return {
+        "score": score,
+        "status": status,
+        "liquidity_score": round(liquidity_score, 1),
+        "debt_score": round(debt_score, 1),
+        "expense_score": round(expense_score, 1),
+        "savings_score": round(savings_score, 1),
+        "reasons": reasons,
+        "dti": round(dti, 4),
     }

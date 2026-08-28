@@ -6,12 +6,16 @@ import Markets from "./pages/Markets";
 import Transactions from "./pages/Transactions";
 import Alerts from "./pages/Alerts";
 import Governance from "./pages/Governance";
+import Intelligence from "./pages/Intelligence";
+import ControlCenter from "./pages/ControlCenter";
 import { Badge, Card } from "./components/ui";
 import type { RiskEvent } from "./types";
 
 const NAV = [
   { id: "dashboard", label: "Dashboard", icon: "🏠" },
   { id: "advisor", label: "AI Advisor", icon: "🤖" },
+  { id: "intelligence", label: "Intelligence", icon: "🧠" },
+  { id: "control", label: "Control Center", icon: "🎛" },
   { id: "loans", label: "Loans", icon: "💰" },
   { id: "markets", label: "Markets", icon: "📈" },
   { id: "transactions", label: "Transactions", icon: "💳" },
@@ -35,13 +39,13 @@ export default function App() {
   useEffect(() => {
     const es = new EventSource("/api/events");
     const handle = (name: string, data: any) => {
-      if (["risk_alert", "transaction_alert", "system_alert"].includes(name)) {
+      if (["risk_alert", "transaction_alert", "system_alert", "financial_alert"].includes(name)) {
         setEvents((prev) => [{ ...data, event: name }, ...prev].slice(0, 40));
       }
     };
     es.onopen = () => setOnline(true);
     es.onerror = () => setOnline(false);
-    ["risk_alert", "transaction_alert", "system_alert"].forEach((n) =>
+    ["risk_alert", "transaction_alert", "system_alert", "financial_alert"].forEach((n) =>
       es.addEventListener(n, (raw: any) => {
         try {
           handle(n, JSON.parse(raw.data));
@@ -57,6 +61,10 @@ export default function App() {
     switch (page) {
       case "advisor":
         return <Advisor />;
+      case "intelligence":
+        return <Intelligence />;
+      case "control":
+        return <ControlCenter />;
       case "loans":
         return <Loans />;
       case "markets":
