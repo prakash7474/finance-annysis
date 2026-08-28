@@ -82,6 +82,19 @@ export const api = {
   agentRoute: (message: string, session_id?: string) =>
     request<any>("/api/agents/route", { method: "POST", body: JSON.stringify({ message, session_id }) }),
   audits: (traceId: string) => request<any>(`/api/audit/${traceId}`),
+
+  // ── Trading add-on (PAPER only) ─────────────────────────────────────────
+  tradingAccounts: () => request<any>("/api/trading/accounts"),
+  tradingAccount: (id: string) => request<any>(`/api/trading/accounts/${id}`),
+  marketLatest: (symbol: string) => request<any>(`/api/trading/market/${symbol}/latest`),
+  marketSma: (symbol: string, w = 20) => request<any>(`/api/trading/market/${symbol}/sma?window=${w}`),
+  marketVolatility: (symbol: string) => request<any>(`/api/trading/market/${symbol}/volatility`),
+  tradingTrend: (symbol: string) => request<any>(`/api/trading/trend/${symbol}`),
+  marketOhlc: (symbol: string, n = 20) => request<any>(`/api/trading/market/${symbol}/ohlc?n=${n}`),
+  allocate: (body: any) => request<any>("/api/trading/allocate", { method: "POST", body: JSON.stringify(body) }),
+  placePaperOrder: (body: any) => request<any>("/api/trading/orders", { method: "POST", body: JSON.stringify(body) }),
+  tradingTrace: () => request<any>("/api/trading/trace"),
+  tradingTraceId: (traceId: string) => request<any>(`/api/trading/trace/${traceId}`),
 };
 
 export function openEventSource(onEvent: (event: string, data: any) => void): EventSource {

@@ -16,6 +16,8 @@ for _p in (BASE, ROOT):
 
 import time  # noqa: E402
 
+import asyncio  # noqa: E402
+
 from fastapi import FastAPI, Request  # noqa: E402
 from fastapi.middleware.cors import CORSMiddleware  # noqa: E402
 from fastapi.responses import JSONResponse, StreamingResponse  # noqa: E402
@@ -29,6 +31,7 @@ from backend.api import (  # noqa: E402
     intelligence_routes,
     loan_routes,
     market_routes,
+    trading_routes,
     v6_routes,
     voice_routes,
 )
@@ -60,7 +63,31 @@ async def lifespan(app: FastAPI):
         "loan": "engine",
         "gemini": "configured" if settings.GEMINI_API_KEY else "unavailable",
     }
+
+    # ── Phase: Trading add-on — accelerate the market replay feed and publish
+    #    volatility_spike events to the SSE stream when volatility crosses a
+    #    threshold (the "AI reacts to a market event" demo beat).
+    from replay_engine import feed as replay_feed
+    from backend.observers.event_bus import EventBus
+
+    replay_running = True
+
+    async def replay_loop():
+        while replay_running:
+            replay_feed.advance()
+            for sym in replay_feed.symbols:
+                if replay_feed.maybe_spike(sym):
+                    EventBus.publish("volatility_spike",
+                                     {"symbol": sym,
+                                      "price": replay_feed.latest_price(sym),
+                                      "realized_volatility": replay_feed.compute_realized_volatility(sym)},
+                                     severity="HIGH")
+            await asyncio.sleep(0.5)
+
+    replay_task = asyncio.create_task(replay_loop())
     yield
+    replay_running = False
+    replay_task.cancel()
     await st.services.close()
 
 
@@ -111,6 +138,7 @@ app.include_router(chat_routes.router)
 app.include_router(voice_routes.router)
 app.include_router(events_routes.router)
 app.include_router(v6_routes.router)
+app.include_router(trading_routes.router)
 
 
 @app.get("/")

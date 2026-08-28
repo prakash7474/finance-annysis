@@ -8,6 +8,7 @@ import Alerts from "./pages/Alerts";
 import Governance from "./pages/Governance";
 import Intelligence from "./pages/Intelligence";
 import ControlCenter from "./pages/ControlCenter";
+import Trading from "./pages/Trading";
 import { Badge, Card } from "./components/ui";
 import type { RiskEvent } from "./types";
 
@@ -16,6 +17,7 @@ const NAV = [
   { id: "advisor", label: "AI Advisor", icon: "🤖" },
   { id: "intelligence", label: "Intelligence", icon: "🧠" },
   { id: "control", label: "Control Center", icon: "🎛" },
+  { id: "trading", label: "Paper Trading", icon: "📊" },
   { id: "loans", label: "Loans", icon: "💰" },
   { id: "markets", label: "Markets", icon: "📈" },
   { id: "transactions", label: "Transactions", icon: "💳" },
@@ -65,6 +67,8 @@ export default function App() {
         return <Intelligence />;
       case "control":
         return <ControlCenter />;
+      case "trading":
+        return <Trading />;
       case "loans":
         return <Loans />;
       case "markets":

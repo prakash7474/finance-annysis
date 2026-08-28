@@ -9,6 +9,7 @@ from backend.api import (  # noqa: F401
     intelligence_routes,
     loan_routes,
     market_routes,
+    trading_routes,
     v6_routes,
     voice_routes,
 )

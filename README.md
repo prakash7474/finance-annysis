@@ -218,7 +218,9 @@ python -m pytest -q
   `test_approval_engine`, `test_api_phase5`).
 - **Phase 6:** 34 tests (`test_agents`, `test_mcp_client`, `test_event_bus`,
   `test_governance`, `test_voice_session`, `test_api_phase6`).
-- **Total:** 249 tests.
+- **Trading add-on:** 38 tests (`test_replay_engine`, `test_accounts_provider`,
+  `test_allocation_engine`, `test_demat_engine`, `test_api_trading`).
+- **Total:** 287 tests.
 
 Phase 5 test coverage includes: anomaly detection (normal/large/category/
 zero-negative), forecasting (deterministic, 7/30-day, no-data, missing income),
@@ -404,6 +406,58 @@ python agent_cli.py scenario --salary-change -10 --expense-change 15 --loan-amou
 python agent_cli.py alerts
 python agent_cli.py recommendations
 ```
+
+## AI Trading Allocation Add-On (Paper Trading — Simulated)
+
+Centerpiece: **the AI proposes a trade, the deterministic Rules Engine visibly
+overrides or blocks it, and everything is traced.** There is **no real broker
+connection and no real money** — stated explicitly, not hidden.
+
+```text
+Market Realtime MCP (accelerated replay)   →  volatility_spike (SSE)
+Mocked Account Snapshot (conservative/moderate/aggressive)
+        ↓
+Stage 1  AI Proposer  →  TradeProposal { symbol, side, qty, rationale, confidence }
+        ↓
+Stage 2  Rules Engine (deterministic, NOT prompt-based)
+         • max % position per risk profile
+         • cash floor the agent can never trade below
+         • daily-loss circuit breaker
+         → resize / reject; logs original proposal, rule, final size
+        ↓
+FinalAllocationDecision  →  Demat MCP (PAPER ONLY)
+        ↓
+Paper order fills at tick + 0.1% slippage  →  mocked snapshot updated
+        ↓
+Trace log (market facts → proposal → rules → decision → order)  →  UI trace panel
+```
+
+- **Replay feed** (`replay_engine.py`): deterministic, scripted series with a
+  baked-in price jump; `compute_sma`, `compute_realized_volatility`,
+  `classify_trend`, and a reliable `volatility_spike` event (fires at a known
+  cursor, looped so the demo never stalls).
+- **Accounts** (`accounts_provider.py`): 3 mocked demo accounts with distinct
+  risk profiles; unknown id → `ACCOUNT_NOT_LINKED`.
+- **Rules engine** (`allocation_engine.py`): caps by risk profile, cash floor,
+  circuit breaker; resizes/rejects and records the reason.
+- **Demat engine** (`demat_engine.py`): paper-only fill at current tick + 0.1%
+  slippage; updates the mocked snapshot; rejects orders that exceed cash
+  (defence in depth). No live-mode code path.
+- **Endpoints:** `GET /api/trading/accounts` · `GET /api/trading/accounts/{id}` ·
+  `GET /api/trading/market/{symbol}/latest|ohlc|sma|volatility` ·
+  `GET /api/trading/trend/{symbol}` · `POST /api/trading/allocate` ·
+  `POST /api/trading/orders` · `GET /api/trading/orders/{id}` ·
+  `GET /api/trading/trace` · `GET /api/trading/trace/{trace_id}`.
+- **MCP servers:** `market_realtime_mcp_server.py` (9005),
+  `governance_mcp_server.py` (9006), `demat_mcp_server.py` (9007).
+- **Demo beat:** ask the AI to "go all in / ignore the limits" — the Rules Engine
+  still resizes/blocks it. `POST /api/trading/allocate` (with or without
+  `override_limits`) shows the visible override + `trace_id` chain.
+
+> **Out of scope (stated to judges):** real bank/broker OAuth (replaced with
+> mocked demo accounts), live order execution (paper mode only), full
+> SEBI/compliance layer (shown as a roadmap slide with the trace log as
+> evidence), voice/Gemini Live (cut). No real money moves.
 
 ## Phase 6 Demo (Multi-Agent + Voice)
 
