@@ -1,244 +1,286 @@
-# AI Finance Controller - Phase 1 + 2 + 3
+# FinPilot — AI Finance Controller
 
-Mock Bank Data + Finance Controller + Loan Advisor + Market Data using MCP.
+**Phase 4 · Unified AI Finance Controller Platform**
 
-## Overview
+FinPilot turns a set of deterministic Python finance/market engines and MCP
+servers into a single, unified platform. You no longer need to know which
+command or engine is responsible — you just ask, and the system routes your
+request to the right deterministic tools, collects *validated facts*, and has
+**Gemini** narrate the answer. Gemini can **never** calculate anything itself.
 
-This project implements an AI finance controller that:
-- Connects to a mock bank via MCP
-- Ingests 79 synthetic transactions across 2 accounts
-- Computes cash position, credit/debit summaries, and EMI breakdowns
-- Analyzes loan scenarios with EMI calculation and risk assessment
-- Compares multiple loan offers with cost and risk ranking
-- Fetches stock prices, OHLC data, and computes SMA/trend/momentum
-- Answers finance and market queries via CLI + AI chatbot
+```text
+                         ┌──────────────────────────┐
+                         │      FINPILOT UI         │
+                         │ React + TypeScript       │
+                         │ Tailwind CSS             │
+                         └────────────┬─────────────┘
+                                      │
+                              REST + WebSocket/SSE
+                                      │
+                         ┌────────────▼─────────────┐
+                         │   FASTAPI AI HOST        │
+                         │ Unified Orchestrator     │
+                         └────────────┬─────────────┘
+                                      │
+                    ┌─────────────────┼─────────────────┐
+                    │                 │                 │
+                    ▼                 ▼                 ▼
+              BANK DOMAIN       CREDIT DOMAIN     MARKET DOMAIN
+                    │                 │                 │
+                    ▼                 ▼                 ▼
+              Bank MCP          Loan Engine        Market MCP
+                    │                 │                 │
+                    └─────────────────┼─────────────────┘
+                                      │
+                              VALIDATED FACTS
+                                      │
+                                      ▼
+                              GEMINI NARRATOR
+                                      │
+                         ┌────────────┴────────────┐
+                         │                         │
+                         ▼                         ▼
+                    Text Response            Voice Response
+
+                         ▲
+                         │
+                  Risk Observer
+                         │
+                        SSE
+                         │
+                         ▼
+                  Real-time Alerts
+                         +
+                 Governance Layer
+                         +
+                  Trace Logging
+                         +
+                   Budget Guard
+```
 
 ## Architecture
 
-```
-agent_cli.py              ← CLI, connects to both MCP servers
-    ↓
-bank_mcp_server.py        ← Bank MCP (accounts, transactions)
-market_mcp_server.py      ← Market MCP (prices, OHLC, news)
-    ↓
-mock_data.json            ← 79 transactions, 2 accounts, 4 loans
-finance_engine.py         ← Finance analysis (Phase 1)
-loan_engine.py            ← Loan math & risk (Phase 2)
-market_engine.py          ← SMA, trend, momentum (Phase 3)
-mock_market_adapter.py    ← Deterministic mock market data
-loan_advisor_chat.py      ← Gemini AI chatbot
+The **LLM is never the financial calculation engine.** The flow is:
+
+```text
+User
+  → Intent / Tool Selection (deterministic router)
+  → Python deterministic engine
+  → Validated structured Facts
+  → Gemini narrator (explains the facts only)
+  → Response
 ```
 
-## Setup
+- **Orchestrator** (`backend/orchestrator/orchestrator.py`) — the central
+  Mediator: receives the request, creates `trace_id / request_id / session_id`,
+  routes the intent, discovers tools, validates inputs, invokes deterministic
+  tools under a **budget guard**, aggregates **Facts**, sends them to the
+  **Gemini narrator**, and returns the response + audit trail.
+- **Tool Registry** (`tool_registry.py`) — one discoverable place where every
+  backend capability is registered (name, domain, server, executor). Routing
+  never hard-codes a tool.
+- **Deterministic Engines** (`finance_engine`, `loan_engine`, `market_engine`,
+  `health_engine`, `scenario_engine`) — all arithmetic lives here.
+- **Data Layer** (`data_layer.py`) — talks to the **MCP servers** (bank /
+  market) with an automatic **mock fallback**, so finance keeps working even if
+  the market MCP is down.
+- **Governance** — operational budget guard, trace/audit logging, Pydantic
+  validation, rate limiting.
+- **Observers** — `risk_observer` + `anomaly_detector` monitor transactions and
+  push **SSE** risk alerts to the UI.
+- **Sessions** — in-memory session/context store (swappable for Redis/PG).
+
+The repo keeps Phase 1–3 code intact and backward-compatible. `engines/` are
+thin re-exports of the root engine modules, and `mcp_servers/` are standalone,
+runnable servers used by the backend.
+
+## Project Layout
+
+```text
+backend/                FASTAPI host: main, config, api/, orchestrator/,
+                        governance/, observers/, schemas/
+mcp_servers/            standalone bank / market / loan MCP servers
+engines/                re-exports of the deterministic engines
+data/                   mock market reference data
+frontend/               React + TS + Tailwind UI (Vite)
+tests/                  unit / api / orchestrator / governance / integration / e2e
+health_engine.py        deterministic financial health score
+scenario_engine.py      deterministic what-if simulator
+```
+
+## Installation
 
 ```bash
-# Install dependencies
+# Python
 pip install -r requirements.txt
 
-# Verify installation
-python -c "import finance_engine; import mcp; print('OK')"
+# Frontend
+cd frontend && npm install && cd ..
 ```
 
-## Usage
+## Environment Variables
 
-### Cash Position
+Copy `.env.example` → `.env` and fill in your Gemini key:
+
 ```bash
-python agent_cli.py cash-position
+cp .env.example .env
+# edit GEMINI_API_KEY=your_key_here
 ```
 
-Output:
-```
-Cash Position:
-----------------------------------------
-  HDFC Savings (ACC001): ₹109,936.50
-  ICICI Credit Card (ACC002): ₹-15,122.00
-----------------------------------------
-  Net cash: ₹94,814.50
-```
+Key variables:
 
-### Monthly Summary
+| Variable | Default | Purpose |
+|---|---|---|
+| `GEMINI_API_KEY` | — | Gemini API key (**server-side only**) |
+| `GEMINI_MODEL` | `gemini-3.6-flash` | narrator model |
+| `DATA_SOURCE` | `mcp` | `mcp` (use servers) or `mock` (offline fallback) |
+| `MCP_TRANSPORT` | `stdio` | `stdio` (backend auto-spawns servers) or `sse` |
+| `BANK/MARKET_MCP_URL` | `http://127.0.0.1:900N/sse` | SSE endpoints |
+| `BUDGET_MAX_TOOL_CALLS` | `8` | max tools per request |
+| `BUDGET_MAX_COST_USD` | `0.05` | max estimated cost per request |
+| `RISK_*` | various | risk observer thresholds |
+| `APP_PORT` | `8000` | backend port |
+
+## Backend Setup
+
 ```bash
-python agent_cli.py monthly-summary --start-date 2026-08-01 --end-date 2026-08-31
+# Simplest (auto-spawns its own stdio MCP servers)
+python backend/main.py
 ```
 
-Output:
-```
-Summary (2026-08-01 to 2026-08-31):
-----------------------------------------
-  Total credit:  ₹122,625.00
-  Total debit:   ₹169,594.00
-  Net change:    -₹46,969.00
-  Transactions:  42
-```
+or run servers yourself over SSE:
 
-### EMI Summary
 ```bash
-python agent_cli.py emi-summary --start-date 2026-08-01 --end-date 2026-08-31
+python mcp_servers/bank_mcp_server.py --sse --port 9001
+python mcp_servers/market_mcp_server.py --sse --port 9002
 ```
 
-Output:
-```
-EMI Summary (2026-08-01 to 2026-08-31):
-----------------------------------------
-  2026-08-02 | EMI - HDFC PERSONAL LOAN | ₹12,500.00
-  2026-08-03 | EMI - ICICI PERSONAL LOAN | ₹9,800.00
-  2026-08-08 | EMI - SBI HOUSING LOAN | ₹15,200.00
-  2026-08-14 | EMI - HDFC PERSONAL LOAN | ₹12,500.00
-  2026-08-14 | EMI - ICICI PERSONAL LOAN | ₹9,800.00
-  2026-08-19 | EMI - SBI HOUSING LOAN | ₹15,200.00
-  2026-08-25 | EMI - HDFC PERSONAL LOAN | ₹12,500.00
-  2026-08-25 | EMI - ICICI PERSONAL LOAN | ₹9,800.00
-----------------------------------------
-  Total EMI: ₹97,300.00
+then set `MCP_TRANSPORT=sse` in `.env` and start the backend.
 
-  Breakdown by lender:
-    HDFC PERSONAL LOAN: ₹37,500.00
-    ICICI PERSONAL LOAN: ₹29,400.00
-    SBI HOUSING LOAN: ₹30,400.00
-```
+## MCP Setup
 
-### EMI-to-Income Ratio
+Standalone servers run over **stdio** by default, or **SSE** with
+`--sse --port N`. The backend connects to them (auto-spawned stdio or remote
+SSE) and falls back to deterministic mock data when a server is unavailable.
+
+## Frontend Setup
+
 ```bash
-python agent_cli.py emi-ratio --start-date 2026-08-01 --end-date 2026-08-31
+cd frontend && npm install && npm run dev
+# http://localhost:5173  (Vite proxies /api and /health to the backend)
 ```
-
-### Category Summary
-```bash
-python agent_cli.py category-summary --start-date 2026-08-01 --end-date 2026-08-31
-```
-
-### Loan Analysis (Phase 2)
-```bash
-python agent_cli.py loan-analysis --amount 300000 --rate 12.0 --tenure-months 36 --monthly-income 80000
-```
-
-Output:
-```
-Loan: Rs.300,000.00 at 12.0% for 36 months
-Income: Rs.80,000.00/month | Existing EMI: Rs.0.00/month
-
-Loan Analysis:
---------------------------------------------------
-  EMI:                Rs.9,964.29
-  Total interest:     Rs.58,714.55
-  Processing fee:     Rs.0.00
-  Total cost:         Rs.358,714.55
-  EMI / income ratio: 12.5%
-
-  Risk level: LOW
-  Flags:
-    [LOW] Interest rate 12.00% is moderate; consider negotiating or comparing offers.
-
-  Suggestion: Low risk. This loan appears manageable for your income.
-```
-
-### Compare Loans (Phase 2)
-```bash
-python agent_cli.py compare-loans --amount 200000 --monthly-income 80000 --existing-emi 22300
-```
-
-Output:
-```
-Loan Comparison for Rs.200,000.00
-Income: Rs.80,000.00/month | Existing EMI: Rs.22,300.00/month
---------------------------------------------------------------------------------
-Rank  Bank            Rate     Tenure   EMI            Total Cost       Risk
---------------------------------------------------------------------------------
-1     ICICI Bank      12.00    24       Rs.9,414.69    Rs.228,952.67    OK LOW
-2     HDFC Bank       11.50    36       Rs.6,595.20    Rs.239,427.25    OK LOW
-3     Axis Bank       9.00     60       Rs.4,151.67    Rs.253,100.26    OK LOW
-4     SBI             8.50     240      Rs.1,735.65    Rs.417,555.15    OK LOW
---------------------------------------------------------------------------------
-Best by total cost:  ICICI Bank (Rs.228,952.67)
-Lowest risk option:  ICICI Bank (risk: LOW)
-```
-
-### Filter by Bank
-```bash
-python agent_cli.py compare-loans --amount 200000 --monthly-income 80000 --banks "HDFC,ICICI"
-```
-
-### Stock Price (Phase 3)
-```bash
-python agent_cli.py price --symbol RELIANCE
-```
-
-Output: `RELIANCE: Rs.2,428.42`
-
-### OHLC History (Phase 3)
-```bash
-python agent_cli.py ohlc --symbol INFY --days 30
-```
-
-### Trend Analysis (Phase 3)
-```bash
-python agent_cli.py trend --symbol INFY --sma-days 20
-```
-
-Output:
-```
-Trend Analysis for INFY:
-----------------------------------------
-  Latest close:  Rs.1,564.21
-  20-day SMA:    Rs.1,520.35
-  Difference:   +2.88%
-  Trend:        ^ UPTREND
-```
-
-### Momentum (Phase 3)
-```bash
-python agent_cli.py momentum --symbol TCS --lookback-days 10
-```
-
-Output:
-```
-Momentum for TCS:
-----------------------------------------
-  Lookback:     10 days
-  Older close:  Rs.3,684.61
-  Latest close: Rs.3,811.99
-  Momentum:     +3.46%
-  Signal:       Mild positive momentum
-```
-
-## Data
-
-- **Accounts**: HDFC Savings (₹125,000 opening), ICICI Credit Card (₹15,000 opening)
-- **Transactions**: 79 transactions covering July-August 2026
-- **Categories**: Salary, Loan EMI, Food, Fuel, Shopping, Transport, Utility, Rent, etc.
-- **Loan Offers**: HDFC Personal, ICICI Personal, SBI Home, Axis Car
-
-### Loan Advisor Chat (Phase 2)
-```bash
-python loan_advisor_chat.py
-```
-
-Interactive AI chatbot powered by **Google Gemini** (gemini-3.6-flash) with automatic function calling. Asks questions like:
-- "I want to take a 3 lakh loan at 12% for 36 months"
-- "Compare HDFC vs ICICI for 2 lakh loan"
-- "What if I extend tenure from 24 to 36 months?"
-- "What's my cash position?"
-
-The chatbot uses Gemini's AFC (Automatic Function Calling) to compute real EMI, risk, and comparisons using your `loan_engine.py` and `finance_engine.py`.
 
 ## Testing
 
 ```bash
-# Run all tests (38 total)
-python -m pytest test_loan_engine.py test_market_engine.py -v
+python -m pytest -q
 ```
 
-### Loan Engine Tests (19)
-- EMI calculation, total cost, risk assessment, offer comparison, formatting
+- **Existing (Phase 1–3):** 38 tests pass (`test_loan_engine.py`,
+  `test_market_engine.py`) — unchanged and backward-compatible.
+- **Phase 4:** 104 new tests across unit / api / orchestrator / governance /
+  integration / e2e.
+- **Total:** 142 tests.
 
-### Market Engine Tests (19)
-- SMA computation, trend detection (uptrend/downtrend/neutral)
-- Momentum calculation, high/low range
-- Mock adapter determinism and integration
+Test layers cover: engines, health score, scenario engine, budget guard, Pydantic
+schema rejection, intent routing, tool-registry discoverability, anomaly
+detection, tracing/audit, the FastAPI endpoints (`/health`, `/api/chat`,
+`/api/scenario`, `/api/events`), the orchestrator (finance/loan/market/
+multi-domain/invalid/budget-exceeded), security (no keys leaked, bad input
+rejected), the canonical multi-domain integration flow, and an 8-step end-to-end
+demo. Tests run offline using the mock data source + fallback narrator.
 
-## Roadmap
+## API Documentation
 
-- [x] Phase 1: Mock bank data + basic finance controller
-- [x] Phase 2: Loan advisor & what-if analysis
-- [x] Phase 3: Market data MCP + trading assistant
-- [ ] Phase 4: Unified finance chatbot
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/health` | service & MCP status (no secrets) |
+| `POST` | `/api/chat` | unified AI chat (multi-turn, returns facts + tools + risk) |
+| `POST` | `/api/scenario` | what-if simulator |
+| `POST` | `/api/loan/analyze` | single loan analysis |
+| `POST` | `/api/loan/compare` | compare offers |
+| `GET` | `/api/finance/cash-position` | cash position |
+| `GET` | `/api/finance/monthly-summary` | credit/debit summary |
+| `GET` | `/api/finance/emi-summary` | EMI breakdown |
+| `GET` | `/api/finance/emi-ratio` | EMI-to-income ratio |
+| `GET` | `/api/finance/category-summary` | spending by category |
+| `GET` | `/api/finance/health-score` | financial health score |
+| `GET` | `/api/finance/transactions` | transaction list |
+| `GET` | `/api/market/price` | latest price |
+| `GET` | `/api/market/trend` | trend vs SMA |
+| `GET` | `/api/market/momentum` | momentum |
+| `GET` | `/api/market/ohlc` | OHLC history |
+| `GET` | `/api/market/range` | high/low range |
+| `GET` | `/api/events` | **SSE** real-time risk alerts |
+| `POST` | `/api/events/inject` | inject a transaction (demo) |
+| `POST` | `/api/events/analyze` | recompute impact after an alert |
+| `POST` | `/api/voice/*` | pluggable voice abstraction (text fallback) |
+
+Interactive OpenAPI docs: `http://127.0.0.1:8000/docs`.
+
+## Demo Workflow (5 minutes)
+
+**Simplest startup (auto-spawns MCP servers):**
+
+```bash
+# Terminal 1                 # Terminal 2
+python backend/main.py       cd frontend && npm run dev
+```
+
+**4-terminal variant (SSE MCP servers):**
+
+```bash
+# Terminal 1                    Terminal 2
+python backend/main.py          python mcp_servers/bank_mcp_server.py --sse --port 9001
+# Terminal 3                    Terminal 4
+python mcp_servers/market_mcp_server.py --sse --port 9002
+cd frontend && npm run dev
+```
+
+> If you run the 4-terminal variant, set `MCP_TRANSPORT=sse` in `.env`.
+
+Then:
+
+1. **Dashboard** opens with FinPilot + *System Online*, cash, income, EMI and a
+   Financial Health card.
+2. **AI Advisor:** ask *“What is my current cash position?”* → Bank MCP →
+   Finance Engine → Facts → Gemini → answer.
+3. Ask *“Can I afford a ₹300,000 loan for 36 months?”* → cash + income + existing
+   EMI + loan + DTI + risk.
+4. *“What if I reduce the loan to ₹200,000?”* → new deterministic DTI/risk.
+5. *“Compare HDFC and ICICI.”* → deterministic comparison table.
+6. *“How is RELIANCE performing?”* → price, SMA, trend, momentum.
+7. **Risk Alerts:** click *Inject ₹80,000 debit* → Risk Observer → SSE →
+   dashboard alert.
+8. Click *Analyze Impact* → updated cash, health, loan affordability, warning.
+
+## Troubleshooting
+
+- **Gemini not answering** — check `GEMINI_API_KEY` in `.env`. FinPilot always
+  falls back to a deterministic narrator, and finance tools keep working.
+- **MCP servers unavailable** — the backend auto-falls back to mock data; finance
+  and market features continue to function.
+- **`₹` shows garbled in the CLI** — run with `PYTHONIOENCODING=utf-8` (the CLI
+  wraps stdout in UTF-8 automatically on Windows).
+- **Frontend can't reach the backend** — make sure the backend runs on
+  `127.0.0.1:8000`; Vite proxies `/api` and `/health` to it.
+- **Tests** — run offline by default (mock + fallback narrator); they never call
+  Gemini or require MCP servers.
+
+## Known Limitations (demo/prototype)
+
+- Bank data, transactions and loan offers are **mock** (`mock_data.json`).
+- Market data comes from a **deterministic mock adapter** (`seed=42`) that
+  synthesises OHLC from symbol base prices; values vary with the report date but
+  are deterministic for a given day. There is **no live market API**.
+- Session/conversation state, rate limiting, event bus and alert retention are
+  **in-memory** (swappable for Redis/Postgres).
+- Voice is a **text-fallback abstraction** (Gemini Live can be plugged in
+  without touching the orchestrator).
+- The financial-health score and risk rules are **configurable heuristics**, not
+  a production credit model.
+- The narrator never computes numbers, but when Gemini is unavailable the
+  deterministic fallback narrator is used.
+
+> FinPilot provides analytical insights, not guaranteed financial advice.
+> For demo & educational purposes only.

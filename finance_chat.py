@@ -42,6 +42,7 @@ sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='repla
 
 load_dotenv()
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
+GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
 
 if not GEMINI_API_KEY:
     print("Error: GEMINI_API_KEY not set. Add it to .env file.")
@@ -450,7 +451,7 @@ def run_chat():
 
     # Create chat session with tools
     chat = client.chats.create(
-        model="gemini-3.6-flash",
+        model=GEMINI_MODEL,
         config=types.GenerateContentConfig(
             tools=all_tools,
             system_instruction=SYSTEM_PROMPT,
@@ -506,7 +507,7 @@ def demo():
     ]
 
     chat = client.chats.create(
-        model="gemini-3.6-flash",
+        model=GEMINI_MODEL,
         config=types.GenerateContentConfig(
             tools=all_tools,
             system_instruction=SYSTEM_PROMPT,

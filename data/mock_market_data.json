@@ -1,0 +1,26 @@
+{
+  "_comment": "Deterministic reference base prices used by the mock market adapter (mock_market_adapter.py). Seed = 42. Values vary with the report date.",
+  "adapter": "MockMarketAdapter",
+  "seed": 42,
+  "symbol_base_prices_inr": {
+    "RELIANCE": 2450.0,
+    "INFY": 1480.0,
+    "TCS": 3650.0,
+    "HDFCBANK": 1620.0,
+    "ICICIBANK": 1250.0,
+    "SBIN": 780.0,
+    "WIPRO": 460.0,
+    "ITC": 475.0,
+    "BHARTIARTL": 1550.0,
+    "KOTAKBANK": 1780.0,
+    "LT": 3400.0,
+    "AXISBANK": 1120.0,
+    "BAJFINANCE": 6800.0,
+    "MARUTI": 12500.0,
+    "SUNPHARMA": 1680.0,
+    "ADANIENT": 2900.0,
+    "TATAMOTORS": 680.0,
+    "NIFTY50": 24500.0,
+    "SENSEX": 80500.0
+  }
+}

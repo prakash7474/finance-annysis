@@ -16,8 +16,10 @@ Commands:
 """
 
 import argparse
+import io
 import json
 import sys
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 from mcp import ClientSession, StdioServerParameters
@@ -27,9 +29,23 @@ import finance_engine as fe
 import loan_engine as le
 import market_engine as me
 
+# Fix Windows console encoding for the rupee symbol (matches finance_chat.py/app.py)
+try:
+    if sys.platform == "win32" and hasattr(sys.stdout, "buffer") and not sys.stdout.closed:
+        sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
+    if sys.platform == "win32" and hasattr(sys.stderr, "buffer") and not sys.stderr.closed:
+        sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8", errors="replace")
+except (ValueError, AttributeError):
+    pass
 
+
+@asynccontextmanager
 async def get_mcp_session(server_script: str = "bank_mcp_server.py"):
-    """Create and connect an MCP session to a server."""
+    """Create and connect an MCP session to a server.
+
+    Used as an async context manager (avoids the anyio teardown bug that
+    occurs when an async generator is closed mid-iteration via ``break``).
+    """
     server_params = StdioServerParameters(
         command=sys.executable,
         args=[str(Path(__file__).parent / server_script)],
@@ -58,7 +74,7 @@ def _parse_tool_result_flat(result):
 
 async def cmd_cash_position(args):
     """Show current cash position across all accounts."""
-    async for session in get_mcp_session():
+    async with get_mcp_session() as session:
         accounts = await session.call_tool("get_accounts", {})
         accounts_list = _parse_tool_result_flat(accounts)
         transactions = _parse_tool_result_flat(
@@ -67,12 +83,11 @@ async def cmd_cash_position(args):
 
         pos = fe.compute_cash_position(accounts_list, transactions)
         print(fe.format_cash_position(pos))
-        break
 
 
 async def cmd_monthly_summary(args):
     """Show credit/debit summary for a date range."""
-    async for session in get_mcp_session():
+    async with get_mcp_session() as session:
         transactions = _parse_tool_result_flat(
             await session.call_tool("get_transactions", {
                 "start_date": args.start_date,
@@ -82,12 +97,11 @@ async def cmd_monthly_summary(args):
 
         summary = fe.summarize_credit_debit(transactions, args.start_date, args.end_date)
         print(fe.format_monthly_summary(summary))
-        break
 
 
 async def cmd_emi_summary(args):
     """Show EMI breakdown for a date range."""
-    async for session in get_mcp_session():
+    async with get_mcp_session() as session:
         transactions = _parse_tool_result_flat(
             await session.call_tool("get_transactions", {
                 "start_date": args.start_date,
@@ -97,12 +111,11 @@ async def cmd_emi_summary(args):
 
         emi_data = fe.detect_emis(transactions, args.start_date, args.end_date)
         print(fe.format_emi_summary(emi_data))
-        break
 
 
 async def cmd_emi_ratio(args):
     """Show EMI-to-income ratio."""
-    async for session in get_mcp_session():
+    async with get_mcp_session() as session:
         transactions = _parse_tool_result_flat(
             await session.call_tool("get_transactions", {
                 "start_date": args.start_date,
@@ -117,12 +130,11 @@ async def cmd_emi_ratio(args):
         print(f"  Total EMI:     {fe.format_inr(ratio_data['total_emi'])}")
         print(f"  EMI/Income:    {ratio_data['emi_income_ratio_pct']:.1f}%")
         print(f"  Status:        {'⚠️  STRESSED (>40%)' if ratio_data['is_stressed'] else '✅ Healthy'}")
-        break
 
 
 async def cmd_category_summary(args):
     """Show spending breakdown by category."""
-    async for session in get_mcp_session():
+    async with get_mcp_session() as session:
         transactions = _parse_tool_result_flat(
             await session.call_tool("get_transactions", {
                 "start_date": args.start_date,
@@ -135,7 +147,6 @@ async def cmd_category_summary(args):
         print("-" * 40)
         for cat, data in sorted(cat_summary["categories"].items(), key=lambda x: x[1]["total"], reverse=True):
             print(f"  {cat:<20} {fe.format_inr(data['total']):>15}  ({data['count']} txns)")
-        break
 
 
 async def cmd_loan_analysis(args):
@@ -156,52 +167,48 @@ async def cmd_loan_analysis(args):
 
 async def cmd_price(args):
     """Get latest stock price."""
-    async for session in get_mcp_session("market_mcp_server.py"):
+    async with get_mcp_session("market_mcp_server.py") as session:
         result = _parse_tool_result_flat(
             await session.call_tool("get_price", {"symbol": args.symbol})
         )
         print(me.format_price(result["symbol"], result["price"]))
-        break
 
 
 async def cmd_ohlc(args):
     """Get OHLC history for a stock."""
-    async for session in get_mcp_session("market_mcp_server.py"):
+    async with get_mcp_session("market_mcp_server.py") as session:
         result = _parse_tool_result_flat(
             await session.call_tool("get_ohlc", {"symbol": args.symbol, "days": args.days})
         )
         print(me.format_ohlc_table(result["bars"], result["symbol"], last_n=min(args.days, 15)))
         print(f"  Total bars: {result['count']}")
-        break
 
 
 async def cmd_trend(args):
     """Analyze trend vs SMA."""
-    async for session in get_mcp_session("market_mcp_server.py"):
+    async with get_mcp_session("market_mcp_server.py") as session:
         days_needed = max(args.sma_days * 2, 60)
         result = _parse_tool_result_flat(
             await session.call_tool("get_ohlc", {"symbol": args.symbol, "days": days_needed})
         )
         trend = me.detect_trend_vs_sma(result["bars"], sma_days=args.sma_days)
         print(me.format_trend(args.symbol, trend))
-        break
 
 
 async def cmd_momentum(args):
     """Analyze price momentum."""
-    async for session in get_mcp_session("market_mcp_server.py"):
+    async with get_mcp_session("market_mcp_server.py") as session:
         days_needed = args.lookback_days + 5
         result = _parse_tool_result_flat(
             await session.call_tool("get_ohlc", {"symbol": args.symbol, "days": days_needed})
         )
         mom = me.compute_momentum(result["bars"], lookback_days=args.lookback_days)
         print(me.format_momentum(args.symbol, mom))
-        break
 
 
 async def cmd_compare_loans(args):
     """Compare loan offers from mock data."""
-    async for session in get_mcp_session():
+    async with get_mcp_session() as session:
         offers_raw = _parse_tool_result_flat(
             await session.call_tool("get_loan_offers", {})
         )
@@ -216,7 +223,7 @@ async def cmd_compare_loans(args):
 
         if not offers_raw:
             print("No loan offers found matching your criteria.")
-            break
+            return
 
         results = le.compare_loan_offers(
             principal=args.amount,
@@ -226,7 +233,6 @@ async def cmd_compare_loans(args):
         )
 
         print(le.format_loan_comparison(results, args.amount, args.monthly_income, args.existing_emi))
-        break
 
 
 async def main():

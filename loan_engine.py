@@ -162,6 +162,23 @@ def compare_loan_offers(
     return results
 
 
+def calculate_dti(
+    monthly_income: float,
+    existing_monthly_emi: float = 0.0,
+    new_monthly_emi: float = 0.0,
+) -> float | None:
+    """
+    Compute the Debt-To-Income ratio as a decimal.
+
+    DTI = (existing_emi + new_emi) / monthly_income
+
+    Returns None when monthly income is not positive.
+    """
+    if monthly_income <= 0:
+        return None
+    return (existing_monthly_emi + new_monthly_emi) / monthly_income
+
+
 # ──────────────────────────────────────────────────────────────────────────────
 # Formatting helpers
 # ──────────────────────────────────────────────────────────────────────────────
