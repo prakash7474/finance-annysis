@@ -13,15 +13,33 @@ import json
 
 from mcp.server.mcpserver import MCPServer
 
-from _common import run_server  # inserts project root on sys.path
+try:
+    from _common import run_server
+except ImportError:
+    from mcp_servers._common import run_server
+
 from backend._boot import MOCK_DATA_FILE
 
 mcp = MCPServer("mock-bank", instructions="Mock bank data server for finance analysis")
 
 
+_cached_data: dict | None = None
+_cached_mtime: float = 0.0
+
+
 def _load_data() -> dict:
-    with open(MOCK_DATA_FILE, "r", encoding="utf-8") as f:
-        return json.load(f)
+    global _cached_data, _cached_mtime
+    try:
+        mtime = MOCK_DATA_FILE.stat().st_mtime
+        if _cached_data is None or mtime > _cached_mtime:
+            with open(MOCK_DATA_FILE, "r", encoding="utf-8") as f:
+                _cached_data = json.load(f)
+            _cached_mtime = mtime
+    except Exception:
+        if _cached_data is not None:
+            return _cached_data
+        raise
+    return _cached_data
 
 
 @mcp.tool()

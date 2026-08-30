@@ -48,7 +48,9 @@ async def lifespan(app: FastAPI):
 
     # Connect services (MCP or mock) and record component status.
     status_map = await st.services.connect()
+    mcp_status = {}
     if settings.DATA_SOURCE == "mcp":
+        mcp_status = await st.mcp_manager.connect_all()
         status_map.setdefault("bank", "offline" if status_map.get("bank") == "mock" else "mcp")
         status_map.setdefault("market", "offline" if status_map.get("market") == "mock" else "mcp")
 
@@ -60,7 +62,10 @@ async def lifespan(app: FastAPI):
     st.components_status = {
         "bank": status_map.get("bank", "offline"),
         "market": status_map.get("market", "offline"),
-        "loan": "engine",
+        "loan": status_map.get("loan", "engine"),
+        "intelligence": mcp_status.get("intelligence", "mock"),
+        "demat": mcp_status.get("demat", "paper"),
+        "governance": mcp_status.get("governance", "mock"),
         "gemini": "configured" if settings.GEMINI_API_KEY else "unavailable",
     }
 
@@ -89,6 +94,7 @@ async def lifespan(app: FastAPI):
     replay_running = False
     replay_task.cancel()
     await st.services.close()
+    await st.mcp_manager.close()
 
 
 app = FastAPI(title="FinPilot - AI Finance Controller", version=VERSION, lifespan=lifespan)

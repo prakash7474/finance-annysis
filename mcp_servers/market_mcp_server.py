@@ -13,7 +13,11 @@ import json
 
 from mcp.server.mcpserver import MCPServer
 
-from _common import run_server  # inserts project root on sys.path
+try:
+    from _common import run_server
+except ImportError:
+    from mcp_servers._common import run_server
+
 from mock_market_adapter import MockMarketAdapter
 
 mcp = MCPServer("market-data", instructions="Market data server for Indian stocks")

@@ -459,6 +459,24 @@ Trace log (market facts → proposal → rules → decision → order)  →  UI 
 > SEBI/compliance layer (shown as a roadmap slide with the trace log as
 > evidence), voice/Gemini Live (cut). No real money moves.
 
+## UI Motion System
+
+The frontend animates like live instrumentation (React + Framer Motion):
+`frontend/src/motion.tsx` defines shared motion tokens + primitives
+(`AnimatedNumber` spring count-up with old→new value-flash in mint/coral,
+`PulseDot`, `ShimmerBar`, `Reveal`/`Stagger`, `TraceSteps`, `Toast`), and
+`index.css` holds the CSS keyframes (decision pulse, price flash, row insert,
+edge flash, voice pulse, mono-number highlight). The whole app is wrapped in
+`<MotionConfig reducedMotion="user">` plus a global `prefers-reduced-motion`
+CSS gate, so motion is skipped for that preference.
+
+Cross-cutting rules it follows: numbers never hard-cut (always animate
+old→new); **amber is reserved exclusively for AI-proposal-vs-rules-engine
+override moments** (corruption/danger are coral; review/flag states use a
+muted violet); the **"Paper trading — simulated"** disclosure is deliberately
+never animated; trace/decision reveals honour real execution order or real
+parallelism (never fake a sequential animation onto genuinely parallel agents).
+
 ## Phase 6 Demo (Multi-Agent + Voice)
 
 - **Control Center** screen: agent status (`/api/agents`), tool discovery

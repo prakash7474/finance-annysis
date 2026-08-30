@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
+import { AnimatePresence, motion } from "framer-motion";
 import { api } from "../services/api";
 import { Card, SectionHeader, Badge, RiskBar, StatCard } from "../components/ui";
+import { AnimatedNumber, Check, Reveal, RevealItem, Stagger } from "../motion";
 import { inr, inr0, riskTone } from "../lib";
 
 const TABS = ["Health", "Forecast", "Goals", "Debt", "Watcher", "Recommendations", "Simulator", "Alerts", "Audit"];
@@ -77,9 +79,10 @@ export default function Intelligence() {
       </div>
 
       {tab === "Health" && facts?.health && (
-        <div className="grid lg:grid-cols-3 gap-6">
+        <Reveal className="grid lg:grid-cols-3 gap-6">
           <Card>
-            <StatCard label="Health Score" value={`${facts.health.score}/100`}
+            <StatCard label="Health Score"
+              value={<AnimatedNumber value={facts.health.score} flash format={(v) => `${Math.round(v)}/100`} />}
               accent={facts.health.score >= 70 ? "text-green" : facts.health.score >= 50 ? "text-amber" : "text-red"} />
             <RiskBar score={facts.health.score} />
             <div className="mt-4"><Badge tone={riskTone(facts.health.status)}>{facts.health.status}</Badge></div>
@@ -106,7 +109,7 @@ export default function Intelligence() {
             <button onClick={narrate} className="mt-4 px-4 py-2 rounded-lg bg-blue text-bg text-sm font-bold">✨ AI Explain</button>
             {ai && <div className="mt-3 text-sm text-text2 whitespace-pre-wrap">{ai}</div>}
           </Card>
-        </div>
+        </Reveal>
       )}
 
       {tab === "Forecast" && facts?.forecast && (
@@ -237,12 +240,23 @@ function GoalsTab({ facts, onReload }: { facts: any; onReload: () => void }) {
         </div>
         <button onClick={create} className="mt-4 px-5 py-2.5 rounded-xl bg-green text-bg font-bold">Create Goal</button>
         {created && (
-          <div className="mt-4 grid grid-cols-2 md:grid-cols-4 gap-3">
-            <StatCard label="Required / mo" value={inr0(created.required_monthly_saving)} accent="text-green" />
-            <StatCard label="Capacity / mo" value={inr0(created.current_saving_capacity)} />
-            <StatCard label="Shortfall / mo" value={inr0(created.monthly_shortfall)} accent="text-red" />
-            <StatCard label="Status" value={created.status} />
-          </div>
+          <Stagger className="mt-4 grid grid-cols-2 md:grid-cols-4 gap-3">
+            <RevealItem>
+              <StatCard label="Required / mo" accent="text-green"
+                value={<AnimatedNumber value={created.required_monthly_saving} flash format={(v) => inr0(v)} />} />
+            </RevealItem>
+            <RevealItem>
+              <StatCard label="Capacity / mo"
+                value={<AnimatedNumber value={created.current_saving_capacity} flash format={(v) => inr0(v)} />} />
+            </RevealItem>
+            <RevealItem>
+              <StatCard label="Shortfall / mo" accent="text-red"
+                value={<AnimatedNumber value={created.monthly_shortfall} flash format={(v) => inr0(v)} />} />
+            </RevealItem>
+            <RevealItem>
+              <StatCard label="Status" value={created.status} />
+            </RevealItem>
+          </Stagger>
         )}
       </Card>
       <Card>
@@ -330,9 +344,18 @@ function RecommendationsTab({ recs, setRecs }: { recs: any[]; setRecs: (r: any[]
       <SectionHeader title="AI Recommendations" sub="Informational guidance - human approval required before any action" />
       <div className="mt-3 space-y-3">
         {recs.map((r: any) => (
-          <div key={r.recommendation_id} className="border border-border rounded-xl p-3 bg-card2">
+          <motion.div
+            key={r.recommendation_id}
+            animate={{ borderColor: r.status === "APPROVED" ? "#1a3a2a" : r.status === "REJECTED" ? "#3a1a20" : "var(--border)" }}
+            transition={{ duration: 0.35 }}
+            className="border rounded-xl p-3 bg-card2"
+          >
             <div className="flex items-center justify-between">
-              <span className="text-sm font-semibold">#{r.priority} {r.title}</span>
+              <span className="text-sm font-semibold inline-flex items-center gap-2">
+                #{r.priority} {r.title}
+                {r.status === "APPROVED" && <span className="text-green"><Check /></span>}
+                {r.status === "REJECTED" && <span className="text-red">✕</span>}
+              </span>
               <Badge tone={r.status === "APPROVED" ? "green" : r.status === "REJECTED" ? "red" : r.requires_approval ? "amber" : "blue"}>
                 {r.status}
               </Badge>
@@ -346,7 +369,7 @@ function RecommendationsTab({ recs, setRecs }: { recs: any[]; setRecs: (r: any[]
                 <button onClick={() => act(r, "reject")} className="px-4 py-2 rounded-lg bg-red text-white text-sm font-bold">Reject</button>
               </div>
             )}
-          </div>
+          </motion.div>
         ))}
       </div>
     </Card>
@@ -382,24 +405,32 @@ function SimulatorTab({ onRun, sim }: { onRun: (p: any) => void; sim: any }) {
       </div>
       <button onClick={run} className="mt-4 px-6 py-2.5 rounded-xl bg-blue text-bg font-bold">Simulate</button>
 
-      {sim && (
-        <div className="mt-5 grid grid-cols-2 gap-4">
-          <div className="bg-card2 rounded-xl p-4">
-            <div className="text-[11px] uppercase tracking-widest text-muted">Current</div>
-            <SimRows s={sim.baseline} />
-          </div>
-          <div className="bg-card2 rounded-xl p-4 border border-blue/30">
-            <div className="text-[11px] uppercase tracking-widest text-blue">Simulated</div>
-            <SimRows s={sim.simulated} />
-          </div>
-          <div className="col-span-2">
-            <div className="text-xs font-bold mb-2">Recommendations</div>
-            {(sim.recommendations || []).map((r: string, i: number) => (
-              <div key={i} className="text-xs text-text2 mb-1">• {r}</div>
-            ))}
-          </div>
-        </div>
-      )}
+      <AnimatePresence mode="wait">
+        {sim && (
+          <motion.div key={sim.scenario_id || Math.random()}
+            initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }}
+            transition={{ duration: 0.35, ease: [0, 0, 0.2, 1] }}
+            className="mt-5 grid grid-cols-2 gap-4">
+            <div className="bg-card2 rounded-xl p-4">
+              <div className="text-[11px] uppercase tracking-widest text-muted">Current</div>
+              <SimRows s={sim.baseline} />
+            </div>
+            <div className="bg-card2 rounded-xl p-4 border border-blue/30">
+              <div className="text-[11px] uppercase tracking-widest text-blue">Simulated</div>
+              <SimRows s={sim.simulated} />
+            </div>
+            <div className="col-span-2">
+              <div className="text-xs font-bold mb-2">Recommendations</div>
+              {(sim.recommendations || []).map((r: string, i: number) => (
+                <div key={i} className="text-xs text-text2 mb-1">• {r}</div>
+              ))}
+              <Reveal delay={0.1} className="mt-3 text-[10px] text-muted">
+                simulated — original data unchanged
+              </Reveal>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </Card>
   );
 }

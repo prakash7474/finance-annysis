@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html><head><title>Screenshot Helper</title></head>
+<body style="background:#0B0E14;color:#E8EAED;font-family:monospace;padding:20px">
+<h2>FinPilot Screenshot Helper</h2>
+<p>This page auto-navigates the app and captures screenshots.</p>
+<div id="status">Ready</div>
+<script>
+const PAGES = [
+  { id: "dashboard", label: "Dashboard" },
+  { id: "trading", label: "Paper Trading" },
+  { id: "markets", label: "Markets" },
+  { id: "advisor", label: "AI Advisor" },
+  { id: "intelligence", label: "Intelligence" },
+  { id: "control", label: "Control Center" },
+  { id: "loans", label: "Loans" },
+  { id: "transactions", label: "Transactions" },
+  { id: "alerts", label: "Risk Alerts" },
+  { id: "governance", label: "Governance" },
+];
+document.getElementById("status").textContent = "Pages to capture: " + PAGES.length;
+</script>
+</body></html>

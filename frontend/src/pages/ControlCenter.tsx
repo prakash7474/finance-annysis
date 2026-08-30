@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
+import { motion } from "framer-motion";
 import { api } from "../services/api";
 import { Card, SectionHeader, Badge } from "../components/ui";
+import { PulseDot, RevealItem, Stagger } from "../motion";
 import { useSse } from "../hooks/useSse";
 
 export default function ControlCenter() {
@@ -63,15 +65,17 @@ export default function ControlCenter() {
       <Card>
         <SectionHeader title="Agent Status" sub="Deterministic agent registry" />
         <div className="mt-3 grid grid-cols-2 md:grid-cols-3 gap-3">
-          {agents.map((a) => (
-            <div key={a.name} className="border border-border rounded-xl p-3 bg-card2">
-              <div className="flex items-center gap-2">
-                <span className={`w-2 h-2 rounded-full ${a.status === "ready" ? "bg-green" : "bg-red"}`} />
-                <span className="text-sm font-semibold">{a.name}</span>
-              </div>
-              <div className="mt-1 text-[11px] text-muted">{a.status}</div>
-            </div>
-          ))}
+          <Stagger className="contents">
+            {agents.map((a) => (
+              <RevealItem key={a.name} className="border border-border rounded-xl p-3 bg-card2">
+                <div className="flex items-center gap-2">
+                  <PulseDot active={busy && a.status === "ready"} size={8} />
+                  <span className="text-sm font-semibold">{a.name}</span>
+                </div>
+                <div className="mt-1 text-[11px] text-muted">{a.status}</div>
+              </RevealItem>
+            ))}
+          </Stagger>
         </div>
       </Card>
 
@@ -111,9 +115,10 @@ export default function ControlCenter() {
           <div className="mt-3 max-h-56 overflow-y-auto space-y-1.5">
             {liveEvents.length === 0 && <div className="text-xs text-muted">Waiting for events…</div>}
             {liveEvents.map((e, i) => (
-              <div key={i} className="border border-border rounded-lg p-2 bg-card2 text-xs">
-                <span className="font-semibold">{e.event}</span> <span className="text-muted">{e.title || e.message || ""}</span>
-              </div>
+              <motion.div key={(e as any).event_id || i} initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.3 }} className="border border-border rounded-lg p-2 bg-card2 text-xs insert-flash">
+                <span className="font-semibold">{e.event}</span> <span className="text-muted">{(e as any).title || e.message || ""}</span>
+              </motion.div>
             ))}
           </div>
           <div className="mt-4 border-t border-border pt-3">
@@ -126,9 +131,10 @@ export default function ControlCenter() {
             <div className="mt-3 space-y-1.5">
               {audit.length === 0 && <div className="text-xs text-muted">Run a request above to populate a trace.</div>}
               {audit.map((e: any, i: number) => (
-                <div key={i} className="text-[11px] font-mono text-text2">
+                <motion.div key={i} initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: i * 0.12, duration: 0.3 }} className="text-[11px] font-mono text-text2">
                   <span className="text-blue">{e.timestamp}</span> {e.operation} <span className="text-green">✓</span> {e.status}
-                </div>
+                </motion.div>
               ))}
             </div>
           </div>

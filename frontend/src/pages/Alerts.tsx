@@ -1,6 +1,8 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { motion } from "framer-motion";
 import { api } from "../services/api";
 import { Card, SectionHeader, Badge } from "../components/ui";
+import { AnimatedNumber, RevealItem, Stagger, Toast } from "../motion";
 import { inr0 } from "../lib";
 import type { RiskEvent } from "../types";
 
@@ -8,7 +10,29 @@ export default function Alerts({ events }: { events: RiskEvent[] }) {
   const [analysis, setAnalysis] = useState<any>(null);
   const [analyzing, setAnalyzing] = useState(false);
   const [lastEvent, setLastEvent] = useState<RiskEvent | null>(null);
+  const [toastMsg, setToastMsg] = useState<string>("");
+  const [toastShow, setToastShow] = useState(false);
+  const [edgeFlash, setEdgeFlash] = useState(false);
+  const prevCount = useRef(events.length);
   const relevant = events.filter((e) => e.event !== "connected");
+
+  // On a new real-time alert, pop a coral toast + brief edge flash.
+  useEffect(() => {
+    if (events.length > prevCount.current) {
+      const newest = events[0];
+      setToastMsg(`${newest.severity}: ${(newest as any).title || newest.message || newest.event}`);
+      setToastShow(true);
+      setEdgeFlash(true);
+      const t1 = setTimeout(() => setToastShow(false), 2000);
+      const t2 = setTimeout(() => setEdgeFlash(false), 650);
+      prevCount.current = events.length;
+      return () => {
+        clearTimeout(t1);
+        clearTimeout(t2);
+      };
+    }
+    prevCount.current = events.length;
+  }, [events.length]);
 
   async function inject(amount: number, desc: string) {
     await api.injectTxn({ account_id: "ACC001", amount, description: desc, type: "DEBIT", category: "TRANSFER" });
@@ -29,7 +53,11 @@ export default function Alerts({ events }: { events: RiskEvent[] }) {
   }
 
   return (
-    <div className="space-y-6">
+    <div className={`space-y-6 ${edgeFlash ? "edge-flash" : ""}`}>
+      <Toast show={toastShow} tone="coral">
+        <div className="font-semibold">⚠ Real-time alert</div>
+        <div className="text-xs text-text2 mt-0.5">{toastMsg}</div>
+      </Toast>
       <SectionHeader title="Risk Alerts" sub="Real-time alerts from the Risk Observer (SSE)" />
 
       <Card>
@@ -50,7 +78,13 @@ export default function Alerts({ events }: { events: RiskEvent[] }) {
           <div className="mt-3 space-y-2 max-h-[50vh] overflow-y-auto">
             {relevant.length === 0 && <div className="text-xs text-muted">No events yet. Inject one above.</div>}
             {relevant.map((e, i) => (
-              <div key={i} className="border border-border rounded-xl p-3 bg-card2">
+              <motion.div
+                key={e.event_id || i}
+                initial={{ opacity: 0, y: -6 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.3, ease: [0, 0, 0.2, 1] }}
+                className="border border-border rounded-xl p-3 bg-card2 insert-flash"
+              >
                 <div className="flex items-center justify-between">
                   <span className="text-sm font-semibold">{e.event}</span>
                   <Badge tone={e.severity === "HIGH" || e.severity === "CRITICAL" ? "red" : e.severity === "MEDIUM" ? "amber" : "blue"}>
@@ -63,7 +97,7 @@ export default function Alerts({ events }: { events: RiskEvent[] }) {
                 <button onClick={() => analyzeEvent(e)} className="mt-2 text-[11px] text-blue underline">
                   Analyze Impact
                 </button>
-              </div>
+              </motion.div>
             ))}
           </div>
         </Card>
@@ -72,28 +106,38 @@ export default function Alerts({ events }: { events: RiskEvent[] }) {
           <SectionHeader title="Impact Analysis" sub="Updated cash · health · loan affordability" />
           {analyzing && <div className="mt-4 text-sm text-blue animate-pulse">Analyzing impact…</div>}
           {analysis && !analysis.error && (
-            <div className="mt-4 space-y-3">
-              <div className="grid grid-cols-2 gap-3">
-                <Mini label="Net Cash After" value={inr0(analysis.snapshot?.net_cash)} tone="text-red" />
-                <Mini label="Health Score" value={`${analysis.health?.overall_score}/100`} tone={analysis.health?.overall_score >= 75 ? "text-green" : "text-amber"} />
-              </div>
-              <div className="text-xs text-text2">Risk: {analysis.health?.risk_level}</div>
-              {analysis.loan_affordability && (
-                <div className="border border-border rounded-xl p-3 bg-card2">
-                  <div className="text-[11px] uppercase tracking-widest text-muted">Loan Affordability Impact (₹3L reference)</div>
-                  <div className="mt-2 space-y-1 text-xs">
-                    <Mini label="EMI" value={inr0(analysis.loan_affordability.emi)} tone="text-text" />
-                    <Mini label="DTI" value={`${(analysis.loan_affordability.dti * 100).toFixed(1)}%`} tone="text-text" />
-                    <Mini label="Risk" value={analysis.loan_affordability.risk_level} tone={analysis.loan_affordability.risk_level === "LOW" ? "text-green" : "text-amber"} />
-                  </div>
+            <Stagger className="mt-4 space-y-3">
+              <RevealItem>
+                <div className="grid grid-cols-2 gap-3">
+                  <Mini label="Net Cash After" tone="text-red"
+                    value={analysis.snapshot?.net_cash != null ? <AnimatedNumber value={analysis.snapshot.net_cash} flash format={(v) => inr0(v)} /> : "—"} />
+                  <Mini label="Health Score" tone={analysis.health?.overall_score >= 75 ? "text-green" : "text-amber"}
+                    value={analysis.health?.overall_score != null ? <AnimatedNumber value={analysis.health.overall_score} flash format={(v) => `${Math.round(v)}/100`} /> : "—"} />
                 </div>
-              )}
-              <div className="space-y-1">
-                {(analysis.risk?.warnings || []).map((w: string, i: number) => (
-                  <div key={i} className="text-xs text-amber">⚠ {w}</div>
-                ))}
-              </div>
-            </div>
+              </RevealItem>
+              <RevealItem>
+                <div className="text-xs text-text2">Risk: {analysis.health?.risk_level}</div>
+              </RevealItem>
+              <RevealItem>
+                {analysis.loan_affordability && (
+                  <div className="border border-border rounded-xl p-3 bg-card2">
+                    <div className="text-[11px] uppercase tracking-widest text-muted">Loan Affordability Impact (₹3L reference)</div>
+                    <div className="mt-2 space-y-1 text-xs">
+                      <Mini label="EMI" value={inr0(analysis.loan_affordability.emi)} tone="text-text" />
+                      <Mini label="DTI" value={`${(analysis.loan_affordability.dti * 100).toFixed(1)}%`} tone="text-text" />
+                      <Mini label="Risk" value={analysis.loan_affordability.risk_level} tone={analysis.loan_affordability.risk_level === "LOW" ? "text-green" : "text-amber"} />
+                    </div>
+                  </div>
+                )}
+              </RevealItem>
+              <RevealItem>
+                <div className="space-y-1">
+                  {(analysis.risk?.warnings || []).map((w: string, i: number) => (
+                    <div key={i} className="text-xs text-amber">⚠ {w}</div>
+                  ))}
+                </div>
+              </RevealItem>
+            </Stagger>
           )}
           {analysis?.error && <div className="mt-4 text-xs text-red">{analysis.error}</div>}
         </Card>
@@ -102,7 +146,7 @@ export default function Alerts({ events }: { events: RiskEvent[] }) {
   );
 }
 
-function Mini({ label, value, tone }: { label: string; value: number | string; tone: string }) {
+function Mini({ label, value, tone }: { label: string; value: React.ReactNode; tone: string }) {
   return (
     <div className="border border-border rounded-xl p-3">
       <div className="text-[11px] uppercase tracking-widest text-muted">{label}</div>

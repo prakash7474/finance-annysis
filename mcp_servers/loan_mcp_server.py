@@ -10,7 +10,11 @@ import json
 
 from mcp.server.mcpserver import MCPServer
 
-from _common import run_server  # inserts project root on sys.path
+try:
+    from _common import run_server
+except ImportError:
+    from mcp_servers._common import run_server
+
 import loan_engine as le
 
 mcp = MCPServer("loan-engine", instructions="Deterministic loan calculation server")
@@ -30,9 +34,15 @@ def analyze_loan(amount: float, rate: float, tenure_months: int, monthly_income:
 
 
 @mcp.tool()
-def compare_loan_offers(amount: float, offers: str, monthly_income: float, existing_emi: float = 0.0) -> str:
-    """Compare loan offers (offers is a JSON array) ranked by total cost."""
-    offer_list = json.loads(offers)
+def compare_loan_offers(amount: float, offers: str | list, monthly_income: float, existing_emi: float = 0.0) -> str:
+    """Compare loan offers (offers is a JSON array or string) ranked by total cost."""
+    if isinstance(offers, list):
+        offer_list = offers
+    else:
+        try:
+            offer_list = json.loads(offers)
+        except Exception as exc:
+            return json.dumps({"error": "INVALID_OFFERS_JSON", "message": str(exc), "offers": []})
     return json.dumps(le.compare_loan_offers(amount, offer_list, monthly_income, existing_emi))
 
 

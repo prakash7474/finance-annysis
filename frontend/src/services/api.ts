@@ -100,7 +100,7 @@ export const api = {
 export function openEventSource(onEvent: (event: string, data: any) => void): EventSource {
   const es = new EventSource(`${BASE}/api/events`);
   es.onopen = () => onEvent("connected", {});
-  ["risk_alert", "transaction_alert", "system_alert", "loan_risk_changed", "tool_step", "health"].forEach(
+  ["risk_alert", "transaction_alert", "system_alert", "loan_risk_changed", "tool_step", "health", "volatility_spike"].forEach(
     (name) => {
       es.addEventListener(name, (raw: any) => {
         try {
@@ -112,5 +112,18 @@ export function openEventSource(onEvent: (event: string, data: any) => void): Ev
     }
   );
   es.onerror = () => onEvent("error", {});
+  return es;
+}
+
+/** Subscribe to volatility_spike events only. Returns an EventSource to close later. */
+export function openVolatilityStream(onSpike: (data: { symbol: string; price: number; realized_volatility: number }) => void): EventSource {
+  const es = new EventSource(`${BASE}/api/events`);
+  es.addEventListener("volatility_spike", (raw: any) => {
+    try {
+      onSpike(JSON.parse(raw.data));
+    } catch {
+      /* ignore */
+    }
+  });
   return es;
 }

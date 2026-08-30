@@ -118,9 +118,10 @@ export interface RiskEvent {
   event: string;
   event_id: string;
   severity: string;
+  title?: string;
   account_id?: string;
   account_name?: string;
-  message: string;
+  message?: string;
   category?: string;
   amount?: number;
   balance_after?: number;

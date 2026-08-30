@@ -47,7 +47,15 @@ class MCPConn:
             else:
                 from mcp import ClientSession, StdioServerParameters
                 from mcp.client.stdio import stdio_client
-                script_path = str(_boot.ROOT / "mcp_servers" / (self.script or ""))
+                script_name = self.script or ""
+                p1 = _boot.ROOT / "mcp_servers" / script_name
+                p2 = _boot.ROOT / script_name
+                if p1.exists():
+                    script_path = str(p1)
+                elif p2.exists():
+                    script_path = str(p2)
+                else:
+                    script_path = str(p1)
                 params = StdioServerParameters(command=sys.executable, args=[script_path])
                 self._stack = stdio_client(params)
 
@@ -68,7 +76,9 @@ class MCPConn:
     async def call_tool(self, tool_name: str, arguments: Dict[str, Any]) -> Any:
         if not self.connected or self._session is None:
             raise RuntimeError(f"MCP connection to {self.name} is not available")
-        result = await self._session.call_tool(tool_name, arguments)
+        import asyncio
+        timeout = getattr(settings, "MCP_TIMEOUT_SECONDS", 5.0)
+        result = await asyncio.wait_for(self._session.call_tool(tool_name, arguments), timeout=timeout)
         return self._parse(result)
 
     @staticmethod
@@ -178,31 +188,67 @@ class Services:
         self._baseline = compute_monthly_baseline(self._mock)
         self._bank_mcp = MCPConn("bank", script=settings.BANK_MCP_SCRIPT)
         self._market_mcp = MCPConn("market", script=settings.MARKET_MCP_SCRIPT)
+        self._loan_mcp = MCPConn("loan", script=settings.LOAN_MCP_SCRIPT)
+        self._intelligence_mcp = MCPConn("intelligence", script="intelligence_mcp_server.py")
+        self._demat_mcp = MCPConn("demat", script="demat_mcp_server.py")
+        self._governance_mcp = MCPConn("governance", script="governance_mcp_server.py")
         self._bank_mode: str = "pending"
         self._market_mode: str = "pending"
+        self._loan_mode: str = "pending"
+        self._intelligence_mode: str = "pending"
+        self._demat_mode: str = "pending"
+        self._governance_mode: str = "pending"
 
     # ── lifecycle ──────────────────────────────────────────────────────────
     async def connect(self) -> Dict[str, str]:
-        status = {"bank": "mock", "market": "mock", "loan": "engine"}
+        status = {"bank": "mock", "market": "mock", "loan": "engine",
+                  "intelligence": "mock", "demat": "paper", "governance": "mock"}
         if self.data_source != "mcp":
             self._bank_mode = "mock"
             self._market_mode = "mock"
+            self._loan_mode = "mock"
+            self._intelligence_mode = "mock"
+            self._demat_mode = "mock"
+            self._governance_mode = "mock"
             return status
+
         if await self._bank_mcp.connect():
             self._bank_mode = "mcp"
             status["bank"] = "mcp"
         else:
             self._bank_mode = "mock"
+
         if await self._market_mcp.connect():
             self._market_mode = "mcp"
             status["market"] = "mcp"
         else:
             self._market_mode = "mock"
+
+        if await self._loan_mcp.connect():
+            self._loan_mode = "mcp"
+            status["loan"] = "mcp"
+
+        if await self._intelligence_mcp.connect():
+            self._intelligence_mode = "mcp"
+            status["intelligence"] = "mcp"
+
+        if await self._demat_mcp.connect():
+            self._demat_mode = "mcp"
+            status["demat"] = "mcp"
+
+        if await self._governance_mcp.connect():
+            self._governance_mode = "mcp"
+            status["governance"] = "mcp"
+
         return status
 
     async def close(self) -> None:
         await self._bank_mcp.close()
         await self._market_mcp.close()
+        await self._loan_mcp.close()
+        await self._intelligence_mcp.close()
+        await self._demat_mcp.close()
+        await self._governance_mcp.close()
 
     @property
     def baseline(self) -> Dict[str, Any]:

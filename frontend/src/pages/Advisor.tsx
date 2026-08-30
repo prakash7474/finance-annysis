@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from "react";
+import { AnimatePresence, motion } from "framer-motion";
 import { api, openEventSource } from "../services/api";
 import { Card } from "../components/ui";
+import { Reveal, ShimmerBar, Check } from "../motion";
 import type { ChatResponse } from "../types";
 
 interface Msg {
@@ -17,12 +19,28 @@ const SAFE_STEPS = [
   "Preparing response",
 ];
 
+// Wrap ₹ amounts and % in a mono, briefly-highlighted span so the reader's eye
+// lands on the computed (deterministic) numbers, not generated ones.
+const NUM_SPLIT = /(₹[\d,]+(?:\.\d+)?|[\d,]+(?:\.\d+)?%)/g;
+const NUM_TEST = /₹[\d,]+(?:\.\d+)?|[\d,]+(?:\.\d+)?%/;
+function renderMono(text: string) {
+  const parts = text.split(NUM_SPLIT);
+  return parts.map((p, i) =>
+    NUM_TEST.test(p) ? (
+      <span key={i} className="mono-flash">{p}</span>
+    ) : (
+      <span key={i}>{p}</span>
+    )
+  );
+}
+
 export default function Advisor() {
   const [messages, setMessages] = useState<Msg[]>([]);
   const [input, setInput] = useState("");
   const [thinking, setThinking] = useState(false);
   const [steps, setSteps] = useState<string[]>([]);
   const [voiceActive, setVoiceActive] = useState(false);
+  const [interrupted, setInterrupted] = useState(false);
   const [connected, setConnected] = useState(false);
   const session = useRef<string>();
   const stepTimer = useRef<any>(null);
@@ -81,6 +99,12 @@ export default function Advisor() {
     }
   }
 
+  async function interruptVoice() {
+    setVoiceActive(false);
+    setInterrupted(true);
+    setTimeout(() => setInterrupted(false), 1200);
+  }
+
   function key(e: React.KeyboardEvent) {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
@@ -100,9 +124,23 @@ export default function Advisor() {
               {connected ? "Connected · Live" : "Reconnecting…"}
             </div>
           </div>
-          <button onClick={useVoice} className={`px-4 py-2 rounded-xl text-sm font-bold ${voiceActive ? "bg-amber/20 text-amber" : "bg-green text-bg"}`}>
-            🎙 {voiceActive ? "Listening…" : "Voice"}
-          </button>
+          <div className="flex items-center gap-2">
+            {interrupted && (
+              <span className="interrupt-tag text-[10px] font-bold text-amber bg-amber/15 px-2 py-1 rounded">INTERRUPTED</span>
+            )}
+            {voiceActive ? (
+              <>
+                <span className="voice-bars" aria-label="listening"><span /><span /><span /></span>
+                <button onClick={interruptVoice} className="px-3 py-2 rounded-xl text-sm font-bold bg-red text-white">
+                  Interrupt
+                </button>
+              </>
+            ) : (
+              <button onClick={useVoice} className={`px-4 py-2 rounded-xl text-sm font-bold bg-green text-bg`}>
+                🎙 Voice
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Messages */}
@@ -128,42 +166,56 @@ export default function Advisor() {
           )}
 
           {messages.map((m, i) => (
-            <div key={i} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
-              <div
-                className={`max-w-[85%] rounded-2xl px-4 py-3 text-sm whitespace-pre-wrap ${
-                  m.role === "user"
-                    ? "bg-blue/20 text-text"
-                    : m.error
-                    ? "bg-red/10 text-text border border-red/30"
-                    : "bg-card2 text-text"
-                }`}
+            <AnimatePresence key={i} initial>
+              <motion.div
+                initial={{ opacity: 0, y: 6 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -6 }}
+                transition={{ duration: m.role === "user" ? 0.2 : 0.35, ease: [0, 0, 0.2, 1] }}
+                className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}
               >
-                {m.text}
-                {m.tools && m.tools.length > 0 && (
-                  <div className="mt-3 pt-2 border-t border-border flex flex-wrap gap-2">
-                    {m.tools.map((t) => (
-                      <span key={t} className="text-[11px] bg-green/15 text-green px-2 py-1 rounded-md">✓ {t}</span>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
+                <div
+                  className={`max-w-[85%] rounded-2xl px-4 py-3 text-sm whitespace-pre-wrap ${
+                    m.role === "user"
+                      ? "bg-blue/20 text-text"
+                      : m.error
+                      ? "bg-red/10 text-text border border-red/30"
+                      : "bg-card2 text-text"
+                  }`}
+                >
+                  {renderMono(m.text)}
+                  {m.tools && m.tools.length > 0 && (
+                    <Reveal delay={0.1} className="mt-3 pt-2 border-t border-border flex flex-wrap gap-2">
+                      {m.tools.map((t, ti) => (
+                        <motion.span
+                          key={t}
+                          initial={{ opacity: 0, scale: 0.9 }}
+                          animate={{ opacity: 1, scale: 1 }}
+                          transition={{ delay: 0.1 + ti * 0.05, duration: 0.2 }}
+                          className="text-[11px] bg-green/15 text-green px-2 py-1 rounded-md inline-flex items-center gap-1"
+                        >
+                          <Check size={12} /> {t}
+                        </motion.span>
+                      ))}
+                    </Reveal>
+                  )}
+                </div>
+              </motion.div>
+            </AnimatePresence>
           ))}
 
           {thinking && (
             <div className="flex justify-start">
               <div className="bg-card2 rounded-2xl px-4 py-3">
-                <div className="flex items-center gap-2 text-xs text-green font-semibold">
+                <div className="flex items-center gap-3 text-xs text-green font-semibold">
                   AI THINKING
-                  <span className="inline-flex gap-1">
-                    {[0, 1, 2].map((d) => (
-                      <span key={d} className="w-1.5 h-1.5 rounded-full bg-green animate-pulse" style={{ animationDelay: `${d * 0.15}s` }} />
-                    ))}
-                  </span>
+                  <ShimmerBar className="w-24" />
                 </div>
                 <div className="mt-2 space-y-1">
                   {steps.map((s, i) => (
-                    <div key={i} className="text-xs text-text2">✓ {s}</div>
+                    <div key={i} className="text-xs text-text2 inline-flex items-center gap-2">
+                      <Check size={12} /> {s}
+                    </div>
                   ))}
                 </div>
               </div>

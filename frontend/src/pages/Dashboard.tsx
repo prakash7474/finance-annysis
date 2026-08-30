@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { api } from "../services/api";
 import { Card, StatCard, SectionHeader, Badge, RiskBar } from "../components/ui";
+import { AnimatedNumber, Stagger, RevealItem } from "../motion";
 import { inr, inr0, riskTone } from "../lib";
 
 export default function Dashboard({
@@ -66,17 +67,28 @@ export default function Dashboard({
       </div>
 
       {/* KPI cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard label="Available Cash" value={cash ? inr0(cash.net_cash) : "—"} accent="text-green" />
-        <StatCard label="Monthly Income" value={summary ? inr0(summary.total_credit) : "—"} />
-        <StatCard label="Existing EMI" value={emis ? inr0(emis.total_emi) : "—"} accent="text-amber" />
-        <StatCard
-          label="Financial Health"
-          value={health ? `${health.overall_score} / 100` : "—"}
-          accent={health ? (health.overall_score >= 75 ? "text-green" : health.overall_score >= 50 ? "text-amber" : "text-red") : "text-text"}
-          sub={health?.risk_level}
-        />
-      </div>
+      <Stagger className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <RevealItem>
+          <StatCard label="Available Cash" accent="text-green"
+            value={cash ? <AnimatedNumber value={cash.net_cash} flash format={(v) => inr0(v)} /> : "—"} />
+        </RevealItem>
+        <RevealItem>
+          <StatCard label="Monthly Income"
+            value={summary ? <AnimatedNumber value={summary.total_credit} flash format={(v) => inr0(v)} /> : "—"} />
+        </RevealItem>
+        <RevealItem>
+          <StatCard label="Existing EMI" accent="text-amber"
+            value={emis ? <AnimatedNumber value={emis.total_emi} flash format={(v) => inr0(v)} /> : "—"} />
+        </RevealItem>
+        <RevealItem>
+          <StatCard
+            label="Financial Health"
+            value={health ? <AnimatedNumber value={health.overall_score} format={(v) => `${Math.round(v)} / 100`} /> : "—"}
+            accent={health ? (health.overall_score >= 75 ? "text-green" : health.overall_score >= 50 ? "text-amber" : "text-red") : "text-text"}
+            sub={health?.risk_level}
+          />
+        </RevealItem>
+      </Stagger>
 
       {/* Health + Cash flow */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -85,7 +97,7 @@ export default function Dashboard({
           {health && (
             <>
               <div className="mt-3 flex items-baseline gap-2">
-                <span className="text-4xl font-extrabold">{health.overall_score}</span>
+                <AnimatedNumber value={health.overall_score} className="text-4xl font-extrabold" format={(v) => `${Math.round(v)}`} />
                 <span className="text-sm text-muted">/ 100</span>
                 <span className="ml-auto">
                   <Badge tone={riskTone(health.risk_level)}>{health.risk_level}</Badge>
