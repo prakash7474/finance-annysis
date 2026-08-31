@@ -8,20 +8,20 @@
   color-scheme: dark;
 
   /* ── Palette ──────────────────────────────────────────────────────────── */
-  --bg-base: #0B0E14;
-  --bg-panel: #12161F;
-  --bg-panel-raised: #181D29;
-  --text-primary: #E8EAED;
-  --text-muted: #7A8194;
-  --accent-buy: #3DDC97;
-  --accent-sell: #E85D5D;
-  --accent-signal: #D9A441;
+  --bg-base: #0B0F16;
+  --bg-panel: #10151D;
+  --bg-panel-raised: #161D28;
+  --text-primary: #F1F5F9;
+  --text-muted: #6B7688;
+  --accent-buy: #22C55E;
+  --accent-sell: #EF4444;
+  --accent-signal: #F59E0B;
 
   /* ── Motion aliases ───────────────────────────────────────────────────── */
-  --mint: #3DDC97;
-  --coral: #E85D5D;
-  --amber: #D9A441;
-  --border-danger: #E85D5D;
+  --mint: #22C55E;
+  --coral: #EF4444;
+  --amber: #F59E0B;
+  --border-danger: #EF4444;
 
   /* ── Spacing scale ───────────────────────────────────────────────────── */
   --sp-1: 4px;
@@ -42,8 +42,20 @@ body,
 
 body {
   background: var(--bg-base);
+  background-image:
+    linear-gradient(to bottom, rgba(59, 130, 246, 0.03), transparent 40%),
+    radial-gradient(1200px 500px at 50% -10%, rgba(34, 197, 94, 0.04), transparent 60%);
   color: var(--text-primary);
   font-family: 'Inter', -apple-system, 'Segoe UI', Roboto, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  letter-spacing: -0.01em;
+}
+
+::selection {
+  background: rgba(59, 130, 246, 0.28);
+  color: #fff;
 }
 
 /* ── Scrollbar ──────────────────────────────────────────────────────────── */
@@ -295,4 +307,20 @@ button:focus-visible {
 @keyframes interruptIn {
   0% { opacity: 0; transform: scale(0.8); }
   100% { opacity: 1; transform: scale(1); }
+}
+
+/* Streaming caret for live voice/LLM text */
+.streaming-caret {
+  display: inline-block;
+  width: 7px;
+  height: 14px;
+  vertical-align: text-bottom;
+  margin-left: 2px;
+  border-radius: 2px;
+  background: var(--accent-buy);
+  animation: caretBlink 0.8s steps(1) infinite;
+}
+@keyframes caretBlink {
+  0%, 60% { opacity: 1; }
+  61%, 100% { opacity: 0; }
 }

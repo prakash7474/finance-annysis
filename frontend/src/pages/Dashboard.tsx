@@ -50,16 +50,17 @@ export default function Dashboard({
       {/* Header */}
       <div className="flex items-start justify-between">
         <div>
-          <h1 className="text-3xl font-bold">FINPILOT</h1>
-          <p className="text-sm text-text2 mt-1">AI Finance Controller</p>
+          <div className="flex items-center gap-2">
+            <h1 className="text-2xl font-bold tracking-tight font-display">FinPilot</h1>
+            <span className="text-[10px] font-medium uppercase tracking-[0.16em] text-muted mt-1">AI Finance Controller</span>
+          </div>
         </div>
         <div className="flex items-center gap-3">
           <Badge tone={online ? "green" : "gray"}>
-            <span className={`w-2 h-2 rounded-full ${online ? "bg-green" : "bg-red"}`} />
             {online ? "System Online" : "Offline"}
           </Badge>
           {alertCount > 0 && (
-            <button onClick={() => goTo("alerts")} className="text-xs text-red underline">
+            <button onClick={() => goTo("alerts")} className="text-xs font-medium text-red hover:underline">
               {alertCount} alert{alertCount > 1 ? "s" : ""}
             </button>
           )}
@@ -158,14 +159,15 @@ export default function Dashboard({
       {/* Quick actions */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {[
-          { label: "Ask the AI", icon: "🤖", to: "advisor" },
-          { label: "Loan Advisor", icon: "💰", to: "loans" },
-          { label: "Market Data", icon: "📈", to: "markets" },
-          { label: "Risk Alerts", icon: "⚠", to: "alerts" },
+          { label: "Ask the AI", icon: "🤖", sub: "Multi-agent advisor", to: "advisor" },
+          { label: "Loan Advisor", icon: "💰", sub: "EMI · DTI · risk", to: "loans" },
+          { label: "Market Data", icon: "📈", sub: "Real-time replay", to: "markets" },
+          { label: "Risk Alerts", icon: "⚠", sub: "Live SSE feed", to: "alerts" },
         ].map((a) => (
-          <button key={a.to} onClick={() => goTo(a.to)} className="bg-card border border-border rounded-2xl p-4 text-left hover:border-blue/50 transition-colors">
-            <div className="text-2xl">{a.icon}</div>
-            <div className="text-sm font-semibold mt-2">{a.label}</div>
+          <button key={a.to} onClick={() => goTo(a.to)} className="group bg-card border border-border/70 rounded-xl p-4 text-left shadow-card transition-all duration-200 hover:border-blue/40 hover:shadow-card-hover">
+            <div className="w-9 h-9 rounded-lg bg-panel-raised ring-1 ring-border flex items-center justify-center text-lg">{a.icon}</div>
+            <div className="text-sm font-semibold mt-3 text-text">{a.label}</div>
+            <div className="text-[11px] text-muted mt-0.5">{a.sub}</div>
           </button>
         ))}
       </div>

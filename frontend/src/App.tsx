@@ -173,43 +173,46 @@ export default function App() {
     <MotionConfig reducedMotion="user">
       <div className="min-h-screen flex">
       {/* Sidebar */}
-      <aside className="w-56 hidden md:flex flex-col gap-0.5 p-3 border-r border-border bg-panel">
+      <aside className="w-60 hidden md:flex flex-col gap-1 p-4 border-r border-border/60 bg-panel">
         {/* Brand */}
-        <div className="flex items-center gap-2.5 px-2 mb-5">
-          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-green to-blue flex items-center justify-center text-xs font-extrabold text-bg">
+        <div className="flex items-center gap-2.5 px-1 mb-6">
+          <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-blue to-green ring-1 ring-white/10 flex items-center justify-center text-sm font-extrabold text-white shadow-card">
             F
           </div>
           <div>
-            <div className="text-xs font-extrabold tracking-wide font-display">
+            <div className="text-sm font-extrabold tracking-tight font-display">
               FinPilot <span className="text-green">AI</span>
             </div>
-            <div className="text-[9px] text-muted tracking-[0.15em]">INSTRUMENT PANEL</div>
+            <div className="text-[10px] text-muted tracking-[0.18em] font-medium">FINANCE CONTROL</div>
           </div>
         </div>
 
         {/* System status */}
-        <div className="flex items-center gap-2 px-2 mb-3 py-1.5 rounded bg-panel-raised border border-border">
+        <div className="flex items-center gap-2 px-2.5 mb-4 py-2 rounded-lg bg-panel-raised border border-border/60">
           <span className={`status-dot ${feedState}`} />
-          <span className="text-[10px] font-semibold text-text2">
+          <span className="text-[11px] font-semibold text-text2">
             {feedState === "connected" ? "System Online" : feedState === "reconnecting" ? "Reconnecting…" : "Offline"}
           </span>
         </div>
 
         {/* Navigation */}
-        <nav className="flex flex-col gap-0.5">
+        <div className="px-1 mb-1 text-[10px] font-medium uppercase tracking-[0.16em] text-muted">Navigate</div>
+        <nav className="flex flex-col gap-1">
           {NAV.map((item) => (
             <button
               key={item.id}
               onClick={() => setPage(item.id)}
-              className={`flex items-center gap-2.5 px-2.5 py-2 rounded text-xs font-semibold text-left transition-colors ${
-                page === item.id ? "bg-green/10 text-green" : "text-text2 hover:bg-panel-raised hover:text-text"
+              className={`flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-[13px] font-medium text-left transition-colors ${
+                page === item.id
+                  ? "bg-blue/10 text-text shadow-card ring-1 ring-blue/20"
+                  : "text-text2 hover:bg-panel-raised hover:text-text"
               }`}
             >
-              <span className="text-sm">{item.icon}</span>
+              <span className="text-[15px]">{item.icon}</span>
               {item.label}
               {item.id === "alerts" &&
                 events.filter((e) => e.severity === "HIGH" || e.severity === "CRITICAL").length > 0 && (
-                  <span className="ml-auto text-[9px] bg-red text-white rounded px-1.5 py-0.5 font-bold">
+                  <span className="ml-auto text-[10px] bg-red text-white rounded-full px-1.5 py-0.5 font-bold">
                     {events.filter((e) => e.severity === "HIGH" || e.severity === "CRITICAL").length}
                   </span>
                 )}
@@ -219,28 +222,28 @@ export default function App() {
 
         {/* Bottom */}
         <div className="mt-auto pt-4">
-          <Card className="!p-2.5 !bg-panel-raised !border-border">
-            <div className="text-[9px] uppercase tracking-widest text-muted font-semibold">System</div>
-            <div className="flex items-center gap-1.5 mt-1 text-[10px] font-semibold text-green">
+          <div className="rounded-xl bg-card2 border border-border/70 p-3 shadow-card">
+            <div className="text-[10px] uppercase tracking-widest text-muted font-medium">Connection</div>
+            <div className="flex items-center gap-2 mt-1.5 text-[11px] font-semibold text-green">
               <span className={`status-dot ${online ? "online" : "offline"}`} />
               {online ? "Connected" : "Offline"}
             </div>
-          </Card>
+          </div>
         </div>
       </aside>
 
       {/* Main */}
       <main className="flex-1 flex flex-col min-h-screen overflow-hidden">
         {/* Top bar with decision pulse */}
-        <div className="flex items-center border-b border-border bg-panel px-4 py-2 shrink-0">
-          <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 border-b border-border/70 bg-panel px-5 py-2.5 shrink-0">
+          <span className="flex items-center gap-2">
             <span className={`status-dot ${feedState}`} />
-            <span className="text-[11px] font-semibold text-text2 font-mono">
-              {feedState === "connected" ? "LIVE" : feedState === "reconnecting" ? "RECONNECTING" : "OFFLINE"}
+            <span className="text-[11px] font-semibold text-text2 font-mono uppercase tracking-wide">
+              {feedState === "connected" ? "Live" : feedState === "reconnecting" ? "Reconnecting" : "Offline"}
             </span>
-          </div>
+          </span>
           <DecisionPulse events={events} />
-          <div className="ml-auto flex items-center gap-4 text-[10px] text-muted">
+          <div className="ml-auto flex items-center gap-4 text-[11px] text-muted">
             <span className="font-mono">{events.length} events</span>
             <span className="font-mono">FinPilot v0.4.0</span>
           </div>

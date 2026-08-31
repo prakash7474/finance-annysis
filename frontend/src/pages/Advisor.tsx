@@ -10,6 +10,7 @@ interface Msg {
   text: string;
   tools?: string[];
   error?: boolean;
+  streaming?: boolean;
 }
 
 const SAFE_STEPS = [
@@ -44,6 +45,8 @@ export default function Advisor() {
   const [connected, setConnected] = useState(false);
   const session = useRef<string>();
   const stepTimer = useRef<any>(null);
+  const voiceWs = useRef<WebSocket | null>(null);
+  const voiceBuffer = useRef<string>("");
 
   useEffect(() => {
     const es = openEventSource((evt) => {
@@ -85,21 +88,61 @@ export default function Advisor() {
   }
 
   async function useVoice() {
-    try {
-      const session2 = await api.voiceStart();
-      setVoiceActive(true);
-      await new Promise((r) => setTimeout(r, 500));
-      const res = await api.voiceSend(session2.session_id, "What is my current financial status?");
-      setMessages((m) => [...m, { role: "user", text: "🎙 (voice): What is my current financial status?" }]);
-      setMessages((m) => [...m, { role: "assistant", text: "🎙 " + res.reply, tools: res.tools_used }]);
-    } catch (e: any) {
-      setMessages((m) => [...m, { role: "assistant", text: "Voice is unavailable. Text works normally.", error: true }]);
-    } finally {
+    if (voiceActive) return;
+    setVoiceActive(true);
+    setInterrupted(false);
+    setMessages((m) => [...m, { role: "user", text: "🎙 (voice): What is my current financial status?" }]);
+    setMessages((m) => [...m, { role: "assistant", text: "", streaming: true }]);
+
+    const proto = window.location.protocol === "https:" ? "wss" : "ws";
+    const ws = new WebSocket(`${proto}://${window.location.host}/api/voice`);
+    voiceWs.current = ws;
+    voiceBuffer.current = "";
+
+    const updateStream = (tail: string) => {
+      setMessages((prev) => {
+        const copy = [...prev];
+        const last = copy[copy.length - 1];
+        if (last && last.streaming) copy[copy.length - 1] = { ...last, text: tail };
+        return copy;
+      });
+    };
+
+    ws.onopen = () => {
+      ws.send(JSON.stringify({ type: "audio", data: "What is my current financial status?" }));
+    };
+    ws.onmessage = (e) => {
+      try {
+        const m = JSON.parse(e.data);
+        if (m.type === "reply") {
+          voiceBuffer.current += m.chunk;
+          updateStream(voiceBuffer.current);
+        } else if (m.type === "done") {
+          updateStream(voiceBuffer.current);
+          setMessages((prev) => prev.map((x) => ({ ...x, streaming: false })));
+          setVoiceActive(false);
+          ws.close();
+        } else if (m.type === "interrupted") {
+          setMessages((prev) => prev.map((x) => ({ ...x, streaming: false })));
+          setVoiceActive(false);
+          ws.close();
+        }
+      } catch {
+        /* ignore malformed frames */
+      }
+    };
+    ws.onerror = () => {
+      setMessages((prev) => prev.map((x) => ({ ...x, streaming: false })));
+      setMessages((m) => [...m, { role: "assistant", text: "Voice channel unavailable. Text works normally.", error: true }]);
       setVoiceActive(false);
-    }
+      ws.close();
+    };
   }
 
-  async function interruptVoice() {
+  function interruptVoice() {
+    if (voiceWs.current && voiceWs.current.readyState === WebSocket.OPEN) {
+      voiceWs.current.send(JSON.stringify({ type: "interrupt" }));
+    }
     setVoiceActive(false);
     setInterrupted(true);
     setTimeout(() => setInterrupted(false), 1200);
@@ -184,6 +227,7 @@ export default function Advisor() {
                   }`}
                 >
                   {renderMono(m.text)}
+                  {m.streaming && <span className="streaming-caret" />}
                   {m.tools && m.tools.length > 0 && (
                     <Reveal delay={0.1} className="mt-3 pt-2 border-t border-border flex flex-wrap gap-2">
                       {m.tools.map((t, ti) => (
