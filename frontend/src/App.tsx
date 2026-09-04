@@ -125,11 +125,23 @@ export default function App() {
         es.addEventListener(n, (raw: any) => {
           try {
             const data = JSON.parse(raw.data);
-            if (mounted) {
-              setEvents((prev) => [{ ...data, event: n }, ...prev].slice(0, 40));
-            }
+            if (!mounted) return;
+            // Skip system_alert events: they lack event_id / severity /
+            // account_id and pollute the event list, causing rendering
+            // issues and dedup confusion.
+            if (n === "system_alert") return;
+            const event = { ...data, event: n } as RiskEvent;
+            // Dedupe by event_id — but only if event_id is a real string
+            // (not undefined from malformed payloads).
+            setEvents((prev) => {
+              const eventId = event.event_id;
+              if (eventId && prev.some((e) => e.event_id === eventId)) {
+                return prev;
+              }
+              return [event, ...prev].slice(0, 40);
+            });
           } catch {
-            /* ignore */
+            /* ignore malformed payloads */
           }
         })
       );
@@ -248,6 +260,14 @@ export default function App() {
             <span className="font-mono">FinPilot v0.4.0</span>
           </div>
         </div>
+
+        {/* Backend unreachable notice (avoids a confusing browser proxy error) */}
+        {!online && (
+          <div className="flex items-center gap-2 border-b border-red/20 bg-red/10 px-5 py-2 text-[12px] text-red">
+            <span className="w-1.5 h-1.5 rounded-full bg-red" />
+            Backend unreachable — start the API server on port 8000 ({`python backend/main.py`}), then serve the frontend.
+          </div>
+        )}
 
         {/* Page content */}
         <div className="flex-1 p-5 overflow-auto">

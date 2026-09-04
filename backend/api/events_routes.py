@@ -12,6 +12,7 @@ from __future__ import annotations
 import asyncio
 import json
 import time
+from datetime import date
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter
@@ -33,7 +34,7 @@ class InjectTxn(BaseModel):
     description: str = "LARGE TRANSACTION"
     type: str = "DEBIT"
     category: str = "TRANSFER"
-    date: str = "2026-08-28"
+    date: str = Field(default_factory=lambda: date.today().isoformat())
 
 
 class AnalyzeRequest(BaseModel):
@@ -95,7 +96,16 @@ async def inject_txn(req: InjectTxn):
         "type": req.type,
         "category": req.category,
     }
-    events = await _observe(st, txn)
+    try:
+        events = await _observe(st, txn)
+    except Exception as exc:
+        # Never let a crash in the observer propagate as an unhandled 500
+        # that leaves the frontend in a broken state.
+        return error_response(
+            StandardErrorCode.INTERNAL_ERROR,
+            f"Transaction injection failed: {exc}",
+            status_code=500,
+        )
     return {"success": True, "events": [e.model_dump(exclude_none=True) for e in events],
             "snapshot": st.risk_observer.snapshot()}
 
@@ -107,47 +117,75 @@ async def analyze_impact(req: AnalyzeRequest):
     if st.risk_observer is None:
         return error_response(StandardErrorCode.INTERNAL_ERROR, "Risk observer not initialized.", status_code=503)
 
-    snapshot = st.risk_observer.snapshot()
+    try:
+        snapshot = st.risk_observer.snapshot()
 
-    # Deterministic health & loan affordability impact.
-    from health_engine import compute_health_score
-    baseline = st.services.baseline
-    accounts = await st.services.get_accounts()
-    transactions = await st.services.get_transactions()
-    summary = fe.summarize_credit_debit(transactions, "2026-08-01", "2026-08-31")
+        # Deterministic health & loan affordability impact.
+        from health_engine import compute_health_score
+        baseline = st.services.baseline
+        accounts = await st.services.get_accounts()
+        transactions = await st.services.get_transactions()
+        # Use the current month for the summary so injected transactions
+        # are always included regardless of when the demo runs.
+        today = date.today()
+        month_start = today.replace(day=1).isoformat()
+        # Compute last day of month: go to first day of next month, minus 1 day.
+        if today.month == 12:
+            month_end = today.replace(month=12, day=31).isoformat()
+        else:
+            month_end = today.replace(month=today.month + 1, day=1).toordinal()
+            from datetime import date as _date
+            month_end = _date.fromordinal(month_end - 1).isoformat()
+        summary = fe.summarize_credit_debit(transactions, month_start, month_end)
 
-    health = compute_health_score(
-        monthly_income=baseline["monthly_income"],
-        existing_emi=baseline["existing_emi"],
-        net_cash=snapshot["net_cash"],
-        total_credit=summary["total_credit"],
-        total_debit=summary["total_debit"],
-    )
+        health = compute_health_score(
+            monthly_income=baseline.get("monthly_income", 0),
+            existing_emi=baseline.get("existing_emi", 0),
+            net_cash=snapshot["net_cash"],
+            total_credit=summary["total_credit"],
+            total_debit=summary["total_debit"],
+        )
 
-    # Loan affordability: recompute DTI/risk for a reference loan with the new cash.
-    import loan_engine as le
-    reference_amount = st.session_manager.get_or_create(None, st.services).last_loan_amount or 300000
-    loan = le.assess_loan_risk(
-        principal=reference_amount, annual_rate_pct=12.0, tenure_months=36,
-        monthly_income=baseline["monthly_income"], existing_monthly_emi=baseline["existing_emi"],
-    )
+        # Loan affordability: recompute DTI/risk for a reference loan with the new cash.
+        import loan_engine as le
+        reference_amount = 300000
+        try:
+            sess = st.session_manager.get_or_create(None, st.services)
+            if sess and sess.last_loan_amount:
+                reference_amount = sess.last_loan_amount
+        except Exception:
+            pass  # Use default 300000
 
-    warnings = health.get("warnings", [])
-    if snapshot["net_cash"] < 25000:
-        warnings.append("Liquidity threshold breached: cash is below ₹25,000.")
-    if loan["risk_level"] in ("MEDIUM", "HIGH", "CRITICAL"):
-        warnings.append(f"Reference loan affordability risk is {loan['risk_level']}.")
+        loan = le.assess_loan_risk(
+            principal=reference_amount, annual_rate_pct=12.0, tenure_months=36,
+            monthly_income=baseline.get("monthly_income", 0),
+            existing_monthly_emi=baseline.get("existing_emi", 0),
+        )
 
-    return {
-        "success": True,
-        "snapshot": snapshot,
-        "health": health,
-        "loan_affordability": {
-            "amount": reference_amount, "emi": loan["emi"], "dti": loan["emi_income_ratio"],
-            "risk_level": loan["risk_level"],
-        },
-        "risk": {"severity": "HIGH" if snapshot["net_cash"] < 25000 else "MEDIUM", "warnings": warnings},
-    }
+        warnings = health.get("warnings", [])
+        if snapshot["net_cash"] < 25000:
+            warnings.append("Liquidity threshold breached: cash is below ₹25,000.")
+        if loan.get("risk_level") in ("MEDIUM", "HIGH", "CRITICAL"):
+            warnings.append(f"Reference loan affordability risk is {loan['risk_level']}.")
+
+        return {
+            "success": True,
+            "snapshot": snapshot,
+            "health": health,
+            "loan_affordability": {
+                "amount": reference_amount,
+                "emi": loan.get("emi", 0),
+                "dti": loan.get("emi_income_ratio", 0),
+                "risk_level": loan.get("risk_level", "UNKNOWN"),
+            },
+            "risk": {"severity": "HIGH" if snapshot["net_cash"] < 25000 else "MEDIUM", "warnings": warnings},
+        }
+    except Exception as exc:
+        return error_response(
+            StandardErrorCode.INTERNAL_ERROR,
+            f"Impact analysis failed: {exc}",
+            status_code=500,
+        )
 
 
 async def _observe(st, txn: Dict[str, Any]) -> list:

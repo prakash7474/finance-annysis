@@ -40,11 +40,20 @@ class RiskObserver:
         # Apply transaction to state
         self.transactions = list(self.transactions)
         self.transactions.append(txn)
-        position = anomaly_detector.cash_position(self.accounts, self.transactions)
-        self._last_balance = {a["account_id"]: a["balance"] for a in position["accounts"]}
+
+        try:
+            position = anomaly_detector.cash_position(self.accounts, self.transactions)
+            self._last_balance = {a["account_id"]: a["balance"] for a in position["accounts"]}
+        except Exception:
+            # If cash position computation fails, keep going — we can still
+            # emit the primary transaction alert.
+            pass
 
         # Run all detection rules on the updated state.
-        signals = anomaly_detector.detect_all(self.accounts, self.transactions, self.thresholds)
+        try:
+            signals = anomaly_detector.detect_all(self.accounts, self.transactions, self.thresholds)
+        except Exception:
+            signals = []
 
         # Always include a transaction event.
         events: List[RiskEvent] = []
@@ -59,21 +68,36 @@ class RiskObserver:
         )
         events.append(primary)
 
+        new_txn_id = txn.get("txn_id")
         for signal in signals:
-            events.append(self._build_event(
-                event="risk_alert",
-                severity=signal["severity"],
-                account_id=signal.get("account_id"),
-                account_name=signal.get("account_name"),
-                message=signal["message"],
-                category=signal["category"],
-                amount=signal.get("amount"),
-                balance_after=self._balance_for(signal.get("account_id")),
-                metadata=signal,
-            ))
+            # Bounded emission: only raise alerts tied to the *newly observed*
+            # transaction. Detection scans the whole history, but prior large
+            # debits / unusual spends must not be re-alerted on every inject
+            # (that fan-out flooded the SSE stream and crashed the UI).
+            # State-based signals (liquidity / utilization / EMI burden) have
+            # no txn_id and are inherently bounded, so they are always emitted.
+            if signal.get("txn_id") is not None and signal.get("txn_id") != new_txn_id:
+                continue
+            try:
+                events.append(self._build_event(
+                    event="risk_alert",
+                    severity=signal.get("severity", "INFO"),
+                    account_id=signal.get("account_id"),
+                    account_name=signal.get("account_name"),
+                    message=signal.get("message", "Risk signal detected."),
+                    category=signal.get("category", "UNKNOWN"),
+                    amount=signal.get("amount"),
+                    balance_after=self._balance_for(signal.get("account_id")),
+                    metadata=signal,
+                ))
+            except Exception:
+                continue  # Skip malformed signals
 
         for event in events:
-            self._publish(event)
+            try:
+                self._publish(event)
+            except Exception:
+                pass  # Never let a publish failure crash the observer
         return events
 
     def _build_event(self, event: str, severity: str, message: str, category: Optional[str] = None,

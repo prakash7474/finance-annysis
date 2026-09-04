@@ -53,10 +53,230 @@ request to the right deterministic tools, collects *validated facts*, and has
                          +
                  Governance Layer
                          +
-                  Trace Logging
-                         +
-                   Budget Guard
+                   Trace Logging
+                          +
+                    Budget Guard
 ```
+
+---
+
+## Feature Documentation & Screenshots
+
+> Every financial number (cash, health, loan affordability, DTI, risk) is computed by
+> **deterministic, auditable Python engines** — the LLM (Gemini) only narrates; it never
+> calculates. Real‑time risk alerts stream over **Server‑Sent Events (SSE)**.
+>
+> All screenshots below are real captures from the running app (`docs/screens/`), identified
+> per page and placed next to the feature they demonstrate.
+
+### Screenshot map
+
+| # | File | Page / State | What it shows |
+|---|------|--------------|---------------|
+| 1 | `docs/screens/dashboard-1.png` | Dashboard | Financial Health, Cash Flow, nav rail, "System Online" |
+| 2 | `docs/screens/dashboard-2.png` | Dashboard | Scrolled / alternate state |
+| 3 | `docs/screens/trading-1.png` | Paper Trading | Market Realtime feed |
+| 4 | `docs/screens/trading-2.png` | Paper Trading | Decision Trace (AI → rules engine) |
+| 5 | `docs/screens/trading-3.png` | Paper Trading | Trace / Audit Chain |
+| 6 | `docs/screens/markets-1.png` | Markets | Price, SMA trend, OHLC range, momentum |
+| 7 | `docs/screens/advisor-1.png` | AI Advisor | Chat: "Compare HDFC and ICICI" + deterministic answer |
+| 8 | `docs/screens/intelligence-1..9.png` | Intelligence | Health, forecasts, debt optimization, goals, digital twin, audit |
+| 9 | `docs/screens/control-1.png` | Control Center | Agent status / Live Events |
+| 10 | `docs/screens/control-2.png` | Control Center | Multi‑agent orchestration header |
+| 11 | `docs/screens/control-3.png` | Control Center | Route a Request + Trace Viewer |
+| 12 | `docs/screens/loans-1.png` | Loans | Single Loan + What‑if simulator |
+| 13 | `docs/screens/loans-2.png` | Loans | Compare Offers (HDFC / ICICI) |
+| 14 | `docs/screens/loans-3.png` | Loans | Simulator result (EMI, health %) |
+| 15 | `docs/screens/transactions-1.png` | Transactions | Mock bank transactions (Aug 2026) |
+| 16 | `docs/screens/alerts-1.png` | Risk Alerts | Demo: inject debit/credit → Live Events |
+| 17 | `docs/screens/alerts-2.png` | Risk Alerts → Analyze Impact | Updated Cash, Health, Loan Affordability, warnings |
+| 17 | `docs/screens/governance-1.png` | Governance | System status, Budget, Validation, MCP |
+
+### Dashboard
+![Dashboard](docs/screens/dashboard-1.png)
+![Dashboard 2](docs/screens/dashboard-2.png)
+
+The landing page is a single source of truth for the user's financial position. The
+**Financial Health** card is produced by `health_engine.compute_health_score`, which blends
+four weighted sub‑scores (cash, EMI burden, DTI, liquidity) into one 0–100 score and a
+risk level — **never** calculated by the LLM. **Cash Flow** comes from
+`finance_engine.compute_cash_position` (opening balances + credits − debits). The top bar shows
+the live SSE connection dot and a running event counter.
+
+### Paper Trading
+![Paper Trading](docs/screens/trading-1.png)
+![Paper Trading](docs/screens/trading-2.png)
+![Paper Trading](docs/screens/trading-3.png)
+
+A safe, simulated trading surface. **Market Realtime** subscribes to an accelerated replay feed
+(`replay_engine`) and, when volatility crosses a threshold, publishes `volatility_spike` events
+to the SSE stream. Every proposed order flows through a **Decision Trace**: the AI *proposes*,
+but a deterministic **rules engine decides** (approve/reject). The **Trace / Audit Chain**
+records market facts → proposal → rules → decision → order with a UUID so every action is
+auditable. **No real orders are ever placed.**
+
+### Markets
+![Markets](docs/screens/markets-1.png)
+
+Powered by the `market_engine` + `mock_market_adapter` (deterministic, seed 42). It shows the
+latest price, an SMA trend line, a 20‑day OHLC range, and a momentum percentage for symbols like
+RELIANCE / TCS / INFY. Because the adapter is seeded, the numbers are reproducible across runs.
+
+### AI Advisor
+![AI Advisor](docs/screens/advisor-1.png)
+
+A conversational assistant. When you ask a question, the **Orchestrator** routes the intent to
+the right deterministic tools (bank/finance/loan/market MCP or engines), collects **validated
+facts**, and only then asks **Gemini to narrate** the answer. In the capture above the user asked
+*"Compare HDFC and ICICI"* and received a deterministic loan‑offer comparison. The LLM never
+computes the math itself.
+
+### Intelligence
+![Intelligence](docs/screens/intelligence-1.png)
+![Intelligence](docs/screens/intelligence-2.png)
+![Intelligence](docs/screens/intelligence-3.png)
+![Intelligence](docs/screens/intelligence-4.png)
+![Intelligence](docs/screens/intelligence-5.png)
+![Intelligence](docs/screens/intelligence-6.png)
+![Intelligence](docs/screens/intelligence-7.png)
+![Intelligence](docs/screens/intelligence-8.png)
+![Intelligence](docs/screens/intelligence-9.png)
+
+The autonomous decision center. It surfaces:
+- **Why this score** — the exact `health_engine` formula breakdown (transparent, never LLM‑calculated).
+- **Cash‑Flow & Spending forecasts** — projections from `forecast_engine` (labeled "not a guarantee").
+- **Debt Optimization** — re‑ranking of debts by total cost (deterministic).
+- **Smart Alerts** — priority‑ordered risk alerts.
+- **Goals** — progress derived from the current financial profile.
+- **Market Watcher** — analysis only; never places trades.
+- **AI Recommendations** — informational guidance; **human approval required** before any action.
+- **Financial Digital Twin** — simulates changes (e.g., a raise or new loan) against a copy of the
+  data; **the original data is never modified**.
+- **Audit / Trace Viewer** — every decision is traceable to a UUID.
+
+### Control Center
+![Control Center](docs/screens/control-1.png)
+![Control Center](docs/screens/control-2.png)
+![Control Center](docs/screens/control-3.png)
+
+The multi‑agent brain. It shows a deterministic **agent registry/status**, lets you **Route a
+Request** (cross‑domain questions fan out to several agents), streams **Live Events** over SSE,
+and provides a UUID‑keyed **Trace Viewer** so you can inspect exactly which agents ran and what
+each returned.
+
+### Loans
+![Loans](docs/screens/loans-1.png)
+![Loans](docs/screens/loans-2.png)
+![Loans](docs/screens/loans-3.png)
+
+**Loan Advisor** explains the true cost of borrowing before you commit:
+- **Single Loan** — EMI (`loan_engine.calculate_emi`), total interest, processing fee,
+  `emi_income_ratio` (DTI), and a risk level.
+- **Compare Offers** — HDFC vs ICICI (and others) ranked by **total cost**, not just rate.
+- **What‑if Simulator** — change income/EMI and watch EMI, DTI, risk, and health score update
+  live (the third capture shows an EMI of ~₹9,964 and a health impact of ~40.3%).
+
+### Transactions
+![Transactions](docs/screens/transactions-1.png)
+
+The raw ledger: mock bank transactions for August 2026 (credits, debits, EMIs). This is the
+source data the finance and anomaly engines analyze.
+
+### Governance
+![Governance](docs/screens/governance-1.png)
+
+Operational guardrails: **System Status** of every component, an operational **Budget** guard that
+caps spend, **Validation** of Pydantic schemas / tool schemas / facts, and live **MCP server**
+health. Governance ensures the autonomous features stay within safe, auditable bounds.
+
+### "Fix the Market" — Risk Alerts Module
+![Risk Alerts](docs/screens/alerts-1.png)
+![Risk Alerts - Impact Analysis](docs/screens/alerts-2.png)
+
+This module demonstrates the end‑to‑end real‑time risk pipeline:
+
+1. **Inject a transaction** — `Inject ₹80,000 debit` or `Inject ₹60,000 credit` →
+   `POST /api/events/inject`.
+2. **RiskObserver** applies the transaction, recomputes the cash position, and runs deterministic
+   anomaly detection (`large_debit`, `large_credit`, `liquidity_drop`, `emi_burden`,
+   `unusual_spending`, `credit_utilization`).
+3. Matching **risk alerts** are published to the `EventBus` and streamed to the browser over
+   **SSE** (`GET /api/events`) as live "Live Events".
+4. Click **Analyze Impact** on any event → `POST /api/events/analyze` recomputes:
+   - **Updated Cash** (`snapshot.net_cash`)
+   - **Health** score + risk level (`health.overall_score`, `health.risk_level`)
+   - **Loan Affordability** for a ₹3L reference loan (`emi`, `dti`, `risk_level`)
+   - Contextual **warnings** (liquidity breach, elevated DTI, etc.)
+
+> Stability note: a prior bug made the observer re‑scan the *entire* transaction history on every
+> inject, so the Nth inject emitted N alerts and flooded the UI. It now emits only alerts tied to
+> the new transaction, and an `ErrorBoundary` prevents any single bad render from blanking the app.
+
+### Architecture
+
+```mermaid
+flowchart LR
+  U[Browser / React UI] -- REST + SSE --> API[FastAPI :8000]
+  API --> OB[Orchestrator / Multi-Agent]
+  API --> RO[RiskObserver + AnomalyDetector]
+  API --> ENG[Engines: finance / health / loan / market / forecast]
+  API --> BUS[(EventBus -> SSE)]
+  OB --> MCP[MCP Servers: bank / market]
+  ENG --> MOCK[(Mock data fallback)]
+  BUS --> U
+```
+
+### Tech stack
+- **Frontend**: React 18 + TypeScript + Vite + Tailwind + Framer Motion.
+- **Backend**: FastAPI, async SSE, in‑memory `EventBus`, deterministic engines.
+- **Data**: `DATA_SOURCE=mock` (default fallback) or `mcp` (live MCP servers). Every domain
+  independently falls back to mock if its MCP server is unreachable.
+
+### Quick Start
+
+```bash
+# Terminal 1 — API (auto-spawns/connects data layer)
+python backend/main.py
+
+# Terminal 2 — UI
+cd frontend && npm install && npm run dev
+```
+
+Open `http://localhost:5173`. Interactive docs: `http://127.0.0.1:8000/docs`.
+
+### API summary
+
+| Method | Path | Purpose |
+|--------|------|---------|
+| GET | `/health` | Health/component status |
+| GET | `/api/events` | **SSE** real‑time risk alerts |
+| POST | `/api/events/inject` | Inject a transaction (triggers RiskObserver) |
+| POST | `/api/events/analyze` | Recompute cash/health/loan affordability |
+| GET | `/api/finance/*` | cash‑position, health‑score, transactions, forecasts, goals, alerts |
+| POST | `/api/loan/*` | analyze / compare loans |
+| GET | `/api/market/*` | price / trend / momentum / range |
+| POST | `/api/chat` | AI Advisor |
+| POST | `/api/agents/route` | multi‑agent routing (Control Center) |
+
+### Stability & recent fixes (root cause → resolution)
+
+| # | Symptom | Root cause | Fix |
+|---|---------|-----------|-----|
+| 1 | Intermittent / consistent crash on inject; unresponsive Risk Alerts page | `RiskObserver.observe_transaction` re‑scanned the **entire growing transaction history** on every inject → event **fan‑out** (Nth inject emitted N alerts), flooding SSE and React state | Emit only alerts tied to the **new** transaction (`signal.txn_id == txn.txn_id`); state‑based signals stay bounded |
+| 2 | Blank white screen after a crash | No React **Error Boundary** — any render exception unmounted the whole tree | Added `frontend/src/ErrorBoundary.tsx` and wrapped `<App/>` in `main.tsx` (recoverable "Try again / Reload" panel) |
+| 3 | Impact Analysis (Updated Cash / Health / Loan Affordability) renders blank | Unhandled promise rejections in `inject`/`analyzeEvent`; `volatility_spike` events polluted "Live Events"; no placeholder/guards | `try/catch` + loading/error states; filtered `volatility_spike` out of relevant events; null‑safe rendering with a placeholder |
+| 4 | "₹60,000 credit" actually injected a **debit** | `inject()` hardcoded `type: "DEBIT"` | Button now passes `type: "CREDIT"` |
+| 5 | Unbounded SSE churn | `setEvents` appended without dedupe | Dedupe by `event_id` + cap at 40 |
+
+### Troubleshooting
+- **Backend unreachable** — start `python backend/main.py` on `127.0.0.1:8000`; Vite proxies
+  `/api` and `/health`.
+- **MCP servers unavailable** — backend auto‑falls back to mock; finance/market keep working.
+- **Gemini not answering** — check `GEMINI_API_KEY`; a deterministic narrator always answers.
+- **App shows a recoverable error** — use "Try again"; a stack‑free message is shown (no blank
+  screen).
+
+---
 
 ## Architecture
 

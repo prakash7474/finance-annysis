@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from datetime import date
+
 from fastapi import APIRouter
 from pydantic import BaseModel, Field
 
@@ -21,9 +23,21 @@ from backend.schemas.finance import (
 router = APIRouter(prefix="/api/finance", tags=["finance"])
 
 
+def _current_month_range() -> tuple[str, str]:
+    """Return (start_date, end_date) for the current month in YYYY-MM-DD format."""
+    today = date.today()
+    start = today.replace(day=1).isoformat()
+    if today.month == 12:
+        end = today.replace(month=12, day=31).isoformat()
+    else:
+        end = today.replace(month=today.month + 1, day=1).toordinal()
+        end = date.fromordinal(end - 1).isoformat()
+    return start, end
+
+
 class DateRange(BaseModel):
-    start_date: str = Field(default="2026-08-01")
-    end_date: str = Field(default="2026-08-31")
+    start_date: str = Field(default_factory=lambda: _current_month_range()[0])
+    end_date: str = Field(default_factory=lambda: _current_month_range()[1])
 
 
 @router.get("/cash-position", response_model=CashPosition)
@@ -36,7 +50,9 @@ async def cash_position():
 
 
 @router.get("/monthly-summary", response_model=MonthlySummary)
-async def monthly_summary(start_date: str = "2026-08-01", end_date: str = "2026-08-31"):
+async def monthly_summary(start_date: str | None = None, end_date: str | None = None):
+    if not start_date or not end_date:
+        start_date, end_date = _current_month_range()
     st = get_state()
     transactions = await st.services.get_transactions(start_date=start_date, end_date=end_date)
     summary = fe.summarize_credit_debit(transactions, start_date, end_date)
@@ -44,7 +60,9 @@ async def monthly_summary(start_date: str = "2026-08-01", end_date: str = "2026-
 
 
 @router.get("/emi-summary", response_model=EmiSummary)
-async def emi_summary(start_date: str = "2026-08-01", end_date: str = "2026-08-31"):
+async def emi_summary(start_date: str | None = None, end_date: str | None = None):
+    if not start_date or not end_date:
+        start_date, end_date = _current_month_range()
     st = get_state()
     transactions = await st.services.get_transactions(start_date=start_date, end_date=end_date)
     data = fe.detect_emis(transactions, start_date, end_date)
@@ -52,7 +70,9 @@ async def emi_summary(start_date: str = "2026-08-01", end_date: str = "2026-08-3
 
 
 @router.get("/emi-ratio", response_model=EmiIncomeRatio)
-async def emi_ratio(start_date: str = "2026-08-01", end_date: str = "2026-08-31"):
+async def emi_ratio(start_date: str | None = None, end_date: str | None = None):
+    if not start_date or not end_date:
+        start_date, end_date = _current_month_range()
     st = get_state()
     transactions = await st.services.get_transactions(start_date=start_date, end_date=end_date)
     ratio = fe.compute_emi_income_ratio(transactions, start_date, end_date)
@@ -60,7 +80,9 @@ async def emi_ratio(start_date: str = "2026-08-01", end_date: str = "2026-08-31"
 
 
 @router.get("/category-summary", response_model=CategorySummary)
-async def category_summary(start_date: str = "2026-08-01", end_date: str = "2026-08-31"):
+async def category_summary(start_date: str | None = None, end_date: str | None = None):
+    if not start_date or not end_date:
+        start_date, end_date = _current_month_range()
     st = get_state()
     transactions = await st.services.get_transactions(start_date=start_date, end_date=end_date)
     data = fe.get_category_summary(transactions, start_date, end_date)
@@ -86,7 +108,8 @@ async def health_score():
     transactions = await st.services.get_transactions()
     pos = fe.compute_cash_position(accounts, transactions)
     baseline = st.services.baseline
-    summary = fe.summarize_credit_debit(transactions, "2026-08-01", "2026-08-31")
+    month_start, month_end = _current_month_range()
+    summary = fe.summarize_credit_debit(transactions, month_start, month_end)
     health = compute_health_score(
         monthly_income=baseline["monthly_income"],
         existing_emi=baseline["existing_emi"],
